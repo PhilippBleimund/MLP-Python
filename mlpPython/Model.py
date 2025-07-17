@@ -1,4 +1,5 @@
-from Layer import InputLayer, PerceptronLayer, PredictionLayer, _Layer
+from .Layer import InputLayer, PerceptronLayer, PredictionLayer, _Layer
+import numpy as np
 
 
 class Model:
@@ -39,6 +40,16 @@ class Model:
             next_layer = self.full_layer_model[i +
                                                1] if i < len(self.full_layer_model) - 1 else None
             layer.link_layer(prev_layer, next_layer)
+
+    def train_model(self, X, Y, epochs: int, learning_rate: float):
+        rng = np.random.default_rng(seed=1)
+        for i in range(epochs):
+            idx = rng.integers(0, len(X))
+            x, y = X[idx], Y[idx]
+
+            self.input_layer.set_data(x)
+            self.output_layer.evaluate_layer()
+            self.output_layer.train_layer(learning_rate, correct_solution=y)
 
     def __call__(self, input_data):
         self.input_layer.set_data(input_data)

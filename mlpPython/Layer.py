@@ -1,7 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
-from activation_functions import get_activation_function, get_activation_function_abl
+from .activation_functions import get_activation_function, get_activation_function_abl
 
 rng = np.random.default_rng(seed=1)
 
@@ -36,6 +36,9 @@ class InputLayer(_Layer):
 
     def set_data(self, data):
         self.o_values = data
+
+    def link_layer(self, prev_layer, next_layer):
+        return super().link_layer(prev_layer, next_layer)
 
     def evaluate_layer(self):
         return super().evaluate_layer()
@@ -99,9 +102,15 @@ class PredictionLayer(_Layer):
         self.b_values = self.weights @ self.prev_layer._get_output()
         self.o_values = self.activation_method(self.b_values)
 
-    def train_layer(self, learning_rate, correct_solution_idx):
-        y_correct = np.zeros(shape=(len(self.classes)))
-        y_correct[correct_solution_idx] = 1
+    def train_layer(self, learning_rate, correct_solution_idx=None, correct_solution=None):
+        if correct_solution is not None:
+            y_correct = correct_solution
+        elif correct_solution_idx is not None:
+            y_correct = np.zeros(shape=(len(self.classes)))
+            y_correct[correct_solution_idx] = 1
+        else:
+            raise ValueError("At least one of the two has to be given")
+        
         for i in range(self.size):
             for j in range(self.prev_layer.size):
                 self.errror_signals[i] = -(y_correct[i] - self.o_values[i]) * \
@@ -109,8 +118,9 @@ class PredictionLayer(_Layer):
                 self.d_weights[i, j] = self.errror_signals[i] * self.prev_layer.o_values[j]
 
         self.weights += -learning_rate * self.d_weights
+        
+        self.prev_layer.train_layer(learning_rate)
 
     def _get_output(self):
-        prev_layer_results = self.prev_layer._get_output()
-
-        return self.classes[np.argmax(prev_layer_results)]
+        
+        return self.classes[np.argmax(self.o_values)]
