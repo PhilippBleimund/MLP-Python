@@ -6,10 +6,22 @@ def get_activation_function(activation_function):
         return lambda z: sigmoid(z)
     elif activation_function == "softmax":
         return lambda z: softmax(z)
+    return lambda z: z
+
+
+def get_activation_function_abl(activation_function):
+    if activation_function == "sigmoid":
+        return lambda z: sigmoid_abl(z)
+
+    return lambda z: z
 
 
 def sigmoid(z):
     return 1/(1 + np.exp(-z))
+
+
+def sigmoid_abl(z):
+    return sigmoid(z) * (1 - sigmoid(z))
 
 
 def softmax(z):
