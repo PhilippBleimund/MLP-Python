@@ -1,5 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from activation_functions import get_activation_function, get_activation_function_abl
 
@@ -26,7 +27,12 @@ class Layer(ABC):
         pass
 
 
-class InputLayer(Layer):
+@dataclass
+class InputLayer:
+    input_size: int
+
+
+class _InputLayer(Layer):
     def __init__(self, input_size, next_layer: Layer):
         super().__init__(input_size, None, next_layer)
         self.o_values = np.zeros(shape=(input_size))
@@ -44,7 +50,13 @@ class InputLayer(Layer):
         return self.o_values
 
 
-class PerceptronLayer(Layer):
+@dataclass
+class PerceptronLayer:
+    num_perceptrons: int
+    activation_method: str
+
+
+class _PerceptronLayer(Layer):
     def __init__(self, num_perceptrons, activation_method, prev_layer: Layer, next_layer: Layer):
         super().__init__(num_perceptrons, prev_layer, next_layer)
         self.activation_method = get_activation_function(activation_method)
@@ -73,7 +85,14 @@ class PerceptronLayer(Layer):
         return self.o_values
 
 
-class PredictionLayer(Layer):
+@dataclass
+class PredictionLayer:
+    num_perceptrons: int
+    activation_method: str
+    classes: list
+
+
+class _PredictionLayer(Layer):
     def __init__(self, num_perceptrons, activation_method, classes: list, prev_layer: Layer):
         super().__init__(num_perceptrons, prev_layer, None)
         self.activation_method = get_activation_function(activation_method)
