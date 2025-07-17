@@ -7,7 +7,12 @@ from activation_functions import get_activation_function, get_activation_functio
 rng = np.random.default_rng(seed=1)
 
 
-class Layer(ABC):
+class LayerData:
+    def __init__(self):
+        pass
+
+
+class _Layer(ABC):
     def __init__(self, size: int, prev_layer, next_layer):
         self.size = size
         self.prev_layer = prev_layer
@@ -28,13 +33,13 @@ class Layer(ABC):
 
 
 @dataclass
-class InputLayer:
+class InputLayer(LayerData):
     input_size: int
 
 
-class _InputLayer(Layer):
-    def __init__(self, input_size, next_layer: Layer):
-        super().__init__(input_size, None, next_layer)
+class _InputLayer(_Layer):
+    def __init__(self, input_size):
+        super().__init__(input_size, None, None)
         self.o_values = np.zeros(shape=(input_size))
 
     def set_data(self, data):
@@ -51,13 +56,13 @@ class _InputLayer(Layer):
 
 
 @dataclass
-class PerceptronLayer:
+class PerceptronLayer(LayerData):
     num_perceptrons: int
     activation_method: str
 
 
-class _PerceptronLayer(Layer):
-    def __init__(self, num_perceptrons, activation_method, prev_layer: Layer, next_layer: Layer):
+class _PerceptronLayer(_Layer):
+    def __init__(self, num_perceptrons, activation_method, prev_layer: _Layer, next_layer: _Layer):
         super().__init__(num_perceptrons, prev_layer, next_layer)
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
@@ -86,14 +91,14 @@ class _PerceptronLayer(Layer):
 
 
 @dataclass
-class PredictionLayer:
+class PredictionLayer(LayerData):
     num_perceptrons: int
     activation_method: str
     classes: list
 
 
-class _PredictionLayer(Layer):
-    def __init__(self, num_perceptrons, activation_method, classes: list, prev_layer: Layer):
+class _PredictionLayer(_Layer):
+    def __init__(self, num_perceptrons, activation_method, classes: list, prev_layer: _Layer):
         super().__init__(num_perceptrons, prev_layer, None)
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
