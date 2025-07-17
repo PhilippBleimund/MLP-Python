@@ -1,23 +1,20 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 from activation_functions import get_activation_function, get_activation_function_abl
 
 rng = np.random.default_rng(seed=1)
 
 
-class LayerData:
-    def __init__(self):
+class _Layer(ABC):
+    def __init__(self, size: int):
+        self.size = size
         pass
 
-
-class _Layer(ABC):
-    def __init__(self, size: int, prev_layer, next_layer):
-        self.size = size
+    @abstractmethod
+    def link_layer(self, prev_layer, next_layer):
         self.prev_layer = prev_layer
         self.next_layer = next_layer
-        pass
 
     @abstractmethod
     def evaluate_layer(self):
@@ -32,14 +29,9 @@ class _Layer(ABC):
         pass
 
 
-@dataclass
-class InputLayer(LayerData):
-    input_size: int
-
-
-class _InputLayer(_Layer):
+class InputLayer(_Layer):
     def __init__(self, input_size):
-        super().__init__(input_size, None, None)
+        super().__init__(input_size)
         self.o_values = np.zeros(shape=(input_size))
 
     def set_data(self, data):
@@ -55,22 +47,19 @@ class _InputLayer(_Layer):
         return self.o_values
 
 
-@dataclass
-class PerceptronLayer(LayerData):
-    num_perceptrons: int
-    activation_method: str
-
-
-class _PerceptronLayer(_Layer):
-    def __init__(self, num_perceptrons, activation_method, prev_layer: _Layer, next_layer: _Layer):
-        super().__init__(num_perceptrons, prev_layer, next_layer)
+class PerceptronLayer(_Layer):
+    def __init__(self, num_perceptrons, activation_method):
+        super().__init__(num_perceptrons)
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
-        self.weights = rng.normal(0, 0.1, size=(num_perceptrons, prev_layer.size))
         self.b_values = np.zeros(shape=(num_perceptrons))
         self.o_values = np.zeros(shape=(num_perceptrons))
         self.errror_signals = np.zeros(shape=num_perceptrons)
-        self.d_weights = np.zeros(shape=(num_perceptrons, prev_layer.size))
+
+    def link_layer(self, prev_layer, next_layer):
+        super().link_layer(prev_layer, next_layer)
+        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
+        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
 
     def evaluate_layer(self):
         self.prev_layer.evaluate_layer()
@@ -90,24 +79,20 @@ class _PerceptronLayer(_Layer):
         return self.o_values
 
 
-@dataclass
-class PredictionLayer(LayerData):
-    num_perceptrons: int
-    activation_method: str
-    classes: list
-
-
-class _PredictionLayer(_Layer):
-    def __init__(self, num_perceptrons, activation_method, classes: list, prev_layer: _Layer):
-        super().__init__(num_perceptrons, prev_layer, None)
+class PredictionLayer(_Layer):
+    def __init__(self, num_perceptrons, activation_method, classes: list):
+        super().__init__(num_perceptrons)
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
-        self.weights = rng.normal(0, 0.1, size=(num_perceptrons, prev_layer.size))
         self.b_values = np.zeros(shape=(num_perceptrons))
         self.o_values = np.zeros(shape=(num_perceptrons))
         self.errror_signals = np.zeros(shape=num_perceptrons)
-        self.d_weights = np.zeros(shape=(num_perceptrons, prev_layer.size))
         self.classes = classes
+
+    def link_layer(self, prev_layer, next_layer):
+        super().link_layer(prev_layer, next_layer)
+        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
+        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
 
     def evaluate_layer(self):
         self.prev_layer.evaluate_layer()
