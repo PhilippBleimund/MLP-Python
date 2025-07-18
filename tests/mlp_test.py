@@ -10,7 +10,7 @@ def test_core():
     (X_train, y_train), (X_test, y_test) = cifar10.load_data()
 
     cifar_classes = ['airplane', 'automobile', 'bird', 'cat',
-                    'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+                     'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
     # Transform label indices to one-hot encoded vectors
 
@@ -29,13 +29,12 @@ def test_core():
     X_train /= 255
     X_test /= 255
 
-
     model = Model()
     model.add(InputLayer(3072))
     model.add(PerceptronLayer(256, "sigmoid"))
     model.add(PerceptronLayer(256, "sigmoid"))
     model.add(PredictionLayer(10, "softmax", cifar_classes))
     model.assemble_model()
-    model.train_model(X_train, y_train, 50, 0.02)
+    model.train_model(X_train, y_train, 50)
 
     print(model(X_test[0]))

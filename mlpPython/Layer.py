@@ -71,9 +71,9 @@ class PerceptronLayer(_Layer):
 
     def train_layer(self, learning_rate):
         for i in range(self.size):
+            self.errror_signals[i] = np.sum(self.next_layer.errror_signals * self.next_layer.weights[:, i]) * \
+                self.activation_method_abl(self.b_values[i])
             for j in range(self.prev_layer.size):
-                self.errror_signals[i] = np.sum(self.next_layer.errror_signals * self.next_layer.weights[:, i]) * \
-                    self.activation_method_abl(self.b_values[i])
                 self.d_weights[i, j] = self.errror_signals[i] * self.prev_layer.o_values[j]
 
         self.weights += -learning_rate * self.d_weights
@@ -91,6 +91,8 @@ class PredictionLayer(_Layer):
         self.o_values = np.zeros(shape=(num_perceptrons))
         self.errror_signals = np.zeros(shape=num_perceptrons)
         self.classes = classes
+        self.cross_entropy_loss = 1e10
+        self.learning_rate = 1e-4
 
     def link_layer(self, prev_layer, next_layer):
         super().link_layer(prev_layer, next_layer)
@@ -102,7 +104,7 @@ class PredictionLayer(_Layer):
         self.b_values = self.weights @ self.prev_layer._get_output()
         self.o_values = self.activation_method(self.b_values)
 
-    def train_layer(self, learning_rate, correct_solution_idx=None, correct_solution=None):
+    def train_layer(self, correct_solution_idx=None, correct_solution=None):
         if correct_solution is not None:
             y_correct = correct_solution
         elif correct_solution_idx is not None:
@@ -110,17 +112,30 @@ class PredictionLayer(_Layer):
             y_correct[correct_solution_idx] = 1
         else:
             raise ValueError("At least one of the two has to be given")
-        
+
         for i in range(self.size):
+            self.errror_signals[i] = -(y_correct[i] - self.o_values[i]) * \
+                self.activation_method_abl(self.b_values[i])
             for j in range(self.prev_layer.size):
-                self.errror_signals[i] = -(y_correct[i] - self.o_values[i]) * \
-                    self.activation_method_abl(self.b_values[i])
                 self.d_weights[i, j] = self.errror_signals[i] * self.prev_layer.o_values[j]
 
-        self.weights += -learning_rate * self.d_weights
-        
-        self.prev_layer.train_layer(learning_rate)
+        epsilon = 1e-12  # small value to avoid log(0)
+        y_pred = np.clip(self.o_values, epsilon, 1. - epsilon)
+        cross_entropy_loss = - np.sum(y_correct * np.log(y_pred))
+
+        print("prev cross: " + str(self.cross_entropy_loss))
+        print("now cross: " + str(cross_entropy_loss))
+        if cross_entropy_loss < self.cross_entropy_loss:
+            self.learning_rate = min(self.learning_rate + 1e-3, 0.01)
+        elif abs(cross_entropy_loss - self.cross_entropy_loss) > 0.1:
+            self.learning_rate = max(self.learning_rate - 1e-3, 1e-6)
+        self.cross_entropy_loss = cross_entropy_loss
+        print("learning_rate: " + str(self.learning_rate))
+
+        self.weights += -self.learning_rate * self.d_weights
+
+        self.prev_layer.train_layer(self.learning_rate)
 
     def _get_output(self):
-        
+
         return self.classes[np.argmax(self.o_values)]
