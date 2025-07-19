@@ -30,10 +30,8 @@ class _Layer(ABC):
 
 
 class _ComputeLayer(_Layer):
-    def __init__(self, num_perceptrons, activation_method):
+    def __init__(self, num_perceptrons):
         super().__init__(num_perceptrons)
-        self.activation_method = get_activation_function(activation_method)
-        self.activation_method_abl = get_activation_function_abl(activation_method)
         self.b_values = np.zeros(shape=(num_perceptrons))
         self.o_values = np.zeros(shape=(num_perceptrons))
         self.errror_signals = np.zeros(shape=num_perceptrons)
@@ -48,25 +46,26 @@ class _ComputeLayer(_Layer):
     def link_layer(self, prev_layer, next_layer):
         super().link_layer(prev_layer, next_layer)
         self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
-        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
+        self.weights = rng.normal(0, np.sqrt(2.0 / prev_layer.size),
+                                  size=(self.size, prev_layer.size))
 
         self.adam_mt_old = np.zeros(shape=(self.size, prev_layer.size))
         self.adam_vt_old = np.zeros(shape=(self.size, prev_layer.size))
 
     @abstractmethod
-    def __gradient_loss(self, *args, **kwargs) -> np.ndarray:
+    def _gradient_loss(self, *args, **kwargs) -> np.ndarray:
         pass
 
-    def __adam_optimizer(self, delta):
+    def _adam_optimizer(self, delta):
+        self.adam_time += 1
         m_t = self.adam_beta1 * self.adam_mt_old + (1-self.adam_beta1) * delta
-        v_t = self.adam_beta2 * self.adam_vt_old + (1-self.adam_beta1) * np.square(delta)
+        v_t = self.adam_beta2 * self.adam_vt_old + (1-self.adam_beta2) * np.square(delta)
         m_corrected = m_t / (1 - (self.adam_beta1 ** self.adam_time))
         v_corrected = v_t / (1 - (self.adam_beta2 ** self.adam_time))
 
         theta = self.adam_alpha * (m_corrected / (np.sqrt(v_corrected + self.adam_epsilon)))
         self.adam_mt_old = m_t
         self.adam_vt_old = v_t
-        self.adam_time += 1
 
         return theta
 
@@ -92,59 +91,51 @@ class InputLayer(_Layer):
         return self.o_values
 
 
-class PerceptronLayer(_Layer):
+class PerceptronLayer(_ComputeLayer):
     def __init__(self, num_perceptrons, activation_method):
         super().__init__(num_perceptrons)
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
-        self.b_values = np.zeros(shape=(num_perceptrons))
-        self.o_values = np.zeros(shape=(num_perceptrons))
-        self.errror_signals = np.zeros(shape=num_perceptrons)
-
-    def link_layer(self, prev_layer, next_layer):
-        super().link_layer(prev_layer, next_layer)
-        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
-        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
 
     def evaluate_layer(self):
         self.prev_layer.evaluate_layer()
         self.b_values = self.weights @ self.prev_layer._get_output()
         self.o_values = self.activation_method(self.b_values)
 
-    def train_layer(self, learning_rate):
-        for i in range(self.size):
-            self.errror_signals[i] = np.sum(self.next_layer.errror_signals * self.next_layer.weights[:, i]) * \
-                self.activation_method_abl(self.b_values[i])
-            for j in range(self.prev_layer.size):
-                self.d_weights[i, j] = self.errror_signals[i] * self.prev_layer.o_values[j]
+    def _gradient_loss(self) -> np.ndarray:
+        self.errror_signals = (self.next_layer.weights.T @
+                               self.next_layer.errror_signals) * self.activation_method(self.b_values)
+        self.d_weights = np.outer(self.errror_signals, self.prev_layer.o_values)
 
-        self.weights += -learning_rate * self.d_weights
+        return self.d_weights
+
+    def train_layer(self):
+        delta = self._gradient_loss()
+        self.weights = self.weights - self._adam_optimizer(delta)
+
+        self.prev_layer.train_layer()
 
     def _get_output(self):
         return self.o_values
 
 
-class PredictionLayer(_Layer):
-    def __init__(self, num_perceptrons, activation_method, classes: list):
+class PredictionLayer(_ComputeLayer):
+    def __init__(self, num_perceptrons, classes: list):
         super().__init__(num_perceptrons)
-        self.activation_method = get_activation_function(activation_method)
-        self.activation_method_abl = get_activation_function_abl(activation_method)
-        self.b_values = np.zeros(shape=(num_perceptrons))
-        self.o_values = np.zeros(shape=(num_perceptrons))
-        self.errror_signals = np.zeros(shape=num_perceptrons)
         self.classes = classes
-        self.cross_entropy_loss = 1e10
-        self.learning_rate = 1e-4
-
-    def link_layer(self, prev_layer, next_layer):
-        super().link_layer(prev_layer, next_layer)
-        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
-        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
+        self.activation_method = get_activation_function("softmax")
 
     def evaluate_layer(self):
         self.prev_layer.evaluate_layer()
         self.b_values = self.weights @ self.prev_layer._get_output()
         self.o_values = self.activation_method(self.b_values)
+
+    def _gradient_loss(self, y_correct) -> np.ndarray:
+        # loss function: cross entropy with softmax
+        self.errror_signals = self.o_values - y_correct
+        self.d_weights = np.outer(self.errror_signals, self.prev_layer.o_values)
+
+        return self.d_weights
 
     def train_layer(self, correct_solution_idx=None, correct_solution=None):
         if correct_solution is not None:
@@ -155,28 +146,15 @@ class PredictionLayer(_Layer):
         else:
             raise ValueError("At least one of the two has to be given")
 
-        for i in range(self.size):
-            self.errror_signals[i] = -(y_correct[i] - self.o_values[i]) * \
-                self.activation_method_abl(self.b_values[i])
-            for j in range(self.prev_layer.size):
-                self.d_weights[i, j] = self.errror_signals[i] * self.prev_layer.o_values[j]
+        error = np.sum(0.5 * np.square(y_correct - self.o_values))
+        cross_entropy = -np.sum(y_correct * np.log(np.clip(self.o_values, 1e-12, 1.-1e-12)))
+        print(f"error: {error}")
+        print(f"cross entropy: {cross_entropy}")
 
-        epsilon = 1e-12  # small value to avoid log(0)
-        y_pred = np.clip(self.o_values, epsilon, 1. - epsilon)
-        cross_entropy_loss = - np.sum(y_correct * np.log(y_pred))
+        delta = self._gradient_loss(y_correct)
+        self.weights = self.weights - self._adam_optimizer(delta)
 
-        print("prev cross: " + str(self.cross_entropy_loss))
-        print("now cross: " + str(cross_entropy_loss))
-        if cross_entropy_loss < self.cross_entropy_loss:
-            self.learning_rate = min(self.learning_rate + 1e-3, 0.01)
-        elif abs(cross_entropy_loss - self.cross_entropy_loss) > 0.1:
-            self.learning_rate = max(self.learning_rate - 1e-3, 1e-6)
-        self.cross_entropy_loss = cross_entropy_loss
-        print("learning_rate: " + str(self.learning_rate))
-
-        self.weights += -self.learning_rate * self.d_weights
-
-        self.prev_layer.train_layer(self.learning_rate)
+        self.prev_layer.train_layer()
 
     def _get_output(self):
 
