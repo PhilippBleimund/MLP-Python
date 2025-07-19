@@ -29,6 +29,48 @@ class _Layer(ABC):
         pass
 
 
+class _ComputeLayer(_Layer):
+    def __init__(self, num_perceptrons, activation_method):
+        super().__init__(num_perceptrons)
+        self.activation_method = get_activation_function(activation_method)
+        self.activation_method_abl = get_activation_function_abl(activation_method)
+        self.b_values = np.zeros(shape=(num_perceptrons))
+        self.o_values = np.zeros(shape=(num_perceptrons))
+        self.errror_signals = np.zeros(shape=num_perceptrons)
+
+        # Default Values for adam optimizer
+        self.adam_alpha = 0.001
+        self.adam_beta1 = 0.9
+        self.adam_beta2 = 0.999
+        self.adam_epsilon = 1e-8
+        self.adam_time = 0
+
+    def link_layer(self, prev_layer, next_layer):
+        super().link_layer(prev_layer, next_layer)
+        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
+        self.weights = rng.normal(0, 0.1, size=(self.size, prev_layer.size))
+
+        self.adam_mt_old = np.zeros(shape=(self.size, prev_layer.size))
+        self.adam_vt_old = np.zeros(shape=(self.size, prev_layer.size))
+
+    @abstractmethod
+    def __gradient_loss(self, *args, **kwargs) -> np.ndarray:
+        pass
+
+    def __adam_optimizer(self, delta):
+        m_t = self.adam_beta1 * self.adam_mt_old + (1-self.adam_beta1) * delta
+        v_t = self.adam_beta2 * self.adam_vt_old + (1-self.adam_beta1) * np.square(delta)
+        m_corrected = m_t / (1 - (self.adam_beta1 ** self.adam_time))
+        v_corrected = v_t / (1 - (self.adam_beta2 ** self.adam_time))
+
+        theta = self.adam_alpha * (m_corrected / (np.sqrt(v_corrected + self.adam_epsilon)))
+        self.adam_mt_old = m_t
+        self.adam_vt_old = v_t
+        self.adam_time += 1
+
+        return theta
+
+
 class InputLayer(_Layer):
     def __init__(self, input_size):
         super().__init__(input_size)
