@@ -15,7 +15,7 @@ def test_core():
     # Transform label indices to one-hot encoded vectors
 
     y_train = to_categorical(y_train, num_classes=10)
-    y_test = to_categorical(y_test, num_classes=10)
+    Y_test = to_categorical(y_test, num_classes=10)
 
     # Transform images from (32,32,3) to 3072-dimensional vectors (32*32*3)
 
@@ -31,10 +31,17 @@ def test_core():
 
     model = Model()
     model.add(InputLayer(3072))
-    model.add(PerceptronLayer(256, "sigmoid"))
-    model.add(PerceptronLayer(256, "sigmoid"))
-    model.add(PredictionLayer(10, "softmax", cifar_classes))
+    model.add(PerceptronLayer(256*4, "relu"))
+    model.add(PerceptronLayer(256*2, "relu"))
+    model.add(PerceptronLayer(256, "relu"))
+    model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
-    model.train_model(X_train, y_train, 50)
+    model.train_model(X_train, y_train, 200)
+
+    # check acuracy
+    num_correct = 0
+    for i in range(len(X_test)):
+        num_correct += model(X_test[i]) == cifar_classes[y_test[i, 0]]
+    print(f"accuracy: {(num_correct/len(X_test))*100}%")
 
     print(model(X_test[0]))
