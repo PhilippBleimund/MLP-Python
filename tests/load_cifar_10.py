@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pickle
 
 from urllib.request import urlretrieve
+from pathlib import Path
 import tarfile
 
 import os
@@ -17,25 +18,29 @@ order, but some training batches may contain more images from one class than ano
 batches contain exactly 5000 images from each class.
 """
 
+DEFAULT_DATA_DIR = "cifar-10-batches-py"
+
 
 def download_dataset():
     url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
-    filename = "cifar-10-python.tar.gz"
+    base_path = str(Path(__file__).parent)
+    filename = base_path + "/cifar-10-python.tar.gz"
     path, headers = urlretrieve(url, filename)
 
-    file = tarfile.open(path)
-    file.extractall()
+    with tarfile.open(path) as file:
+        file.extractall(path=base_path)
 
 
 def unpickle(file):
     """load the cifar-10 data"""
 
+    print(file)
     with open(file, 'rb') as fo:
         data = pickle.load(fo, encoding='bytes')
     return data
 
 
-def load_cifar_10_data(data_dir, negatives=False):
+def load_cifar_10_data(data_dir=DEFAULT_DATA_DIR, negatives=False):
     """
     Return train_data, train_filenames, train_labels, test_data, test_filenames, test_labels
     """
@@ -45,6 +50,8 @@ def load_cifar_10_data(data_dir, negatives=False):
     # label_names: ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
     # num_vis: :3072
 
+    base_path = str(Path(__file__).parent)
+    data_dir = base_path + "/" + data_dir
     if not os.path.isdir(data_dir):
         download_dataset()
 
