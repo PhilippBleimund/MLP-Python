@@ -49,7 +49,7 @@ class Model:
 
             self.input_layer.set_data(x)
             self.output_layer.evaluate_layer()
-            self.output_layer.train_layer(correct_solution=y)
+            self.output_layer.train_layer(correct_solution_idx=y)
 
     def __call__(self, input_data):
         self.input_layer.set_data(input_data)

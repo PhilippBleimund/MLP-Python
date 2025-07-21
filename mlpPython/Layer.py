@@ -12,6 +12,10 @@ class _Layer(ABC):
         pass
 
     @abstractmethod
+    def prepare_for_training(self, batch_size):
+        self.batch_size = batch_size
+
+    @abstractmethod
     def link_layer(self, prev_layer, next_layer):
         self.prev_layer = prev_layer
         self.next_layer = next_layer
@@ -32,9 +36,6 @@ class _Layer(ABC):
 class _ComputeLayer(_Layer):
     def __init__(self, num_perceptrons):
         super().__init__(num_perceptrons)
-        self.b_values = np.zeros(shape=(num_perceptrons))
-        self.o_values = np.zeros(shape=(num_perceptrons))
-        self.errror_signals = np.zeros(shape=num_perceptrons)
 
         # Default Values for adam optimizer
         self.adam_alpha = 0.001
@@ -43,14 +44,20 @@ class _ComputeLayer(_Layer):
         self.adam_epsilon = 1e-8
         self.adam_time = 0
 
+    def prepare_for_training(self, batch_size):
+        super().prepare_for_training(batch_size)
+        self.b_values = np.zeros(shape=(self.size))
+        self.o_values = np.zeros(shape=(self.size))
+        self.errror_signals = np.zeros(shape=self.size)
+        self.d_weights = np.zeros(shape=(self.size, self.prev_layer.size))
+        self.weights = rng.normal(0, np.sqrt(2.0 / self.prev_layer.size),
+                                  size=(self.size, self.prev_layer.size))
+
+        self.adam_mt_old = np.zeros(shape=(self.size, self.prev_layer.size))
+        self.adam_vt_old = np.zeros(shape=(self.size, self.prev_layer.size))
+
     def link_layer(self, prev_layer, next_layer):
         super().link_layer(prev_layer, next_layer)
-        self.d_weights = np.zeros(shape=(self.size, prev_layer.size))
-        self.weights = rng.normal(0, np.sqrt(2.0 / prev_layer.size),
-                                  size=(self.size, prev_layer.size))
-
-        self.adam_mt_old = np.zeros(shape=(self.size, prev_layer.size))
-        self.adam_vt_old = np.zeros(shape=(self.size, prev_layer.size))
 
     @abstractmethod
     def _gradient_loss(self, *args, **kwargs) -> np.ndarray:
@@ -73,7 +80,10 @@ class _ComputeLayer(_Layer):
 class InputLayer(_Layer):
     def __init__(self, input_size):
         super().__init__(input_size)
-        self.o_values = np.zeros(shape=(input_size))
+
+    def prepare_for_training(self, batch_size):
+        super().prepare_for_training(batch_size)
+        self.o_values = np.zeros(shape=(self.size))
 
     def set_data(self, data):
         self.o_values = data
