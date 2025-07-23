@@ -12,8 +12,8 @@ class _Layer(ABC):
         pass
 
     @abstractmethod
-    def prepare_for_training(self, batch_size):
-        self.batch_size = batch_size
+    def prepare_for_training(self, max_batch_size):
+        self.max_batch_size = max_batch_size
 
     @abstractmethod
     def link_layer(self, prev_layer, next_layer):
@@ -21,7 +21,7 @@ class _Layer(ABC):
         self.next_layer = next_layer
 
     @abstractmethod
-    def evaluate_layer(self):
+    def evaluate_layer(self, input_batch_size):
         pass
 
     @abstractmethod
@@ -44,10 +44,10 @@ class _ComputeLayer(_Layer):
         self.adam_epsilon = 1e-8
         self.adam_time = 0
 
-    def prepare_for_training(self, batch_size):
-        super().prepare_for_training(batch_size)
-        self.b_values = np.zeros(shape=(self.size))
-        self.o_values = np.zeros(shape=(self.size))
+    def prepare_for_training(self, max_batch_size):
+        super().prepare_for_training(max_batch_size)
+        self.b_values = np.zeros(shape=(max_batch_size, self.size))
+        self.o_values = np.zeros(shape=(max_batch_size, self.size))
         self.errror_signals = np.zeros(shape=self.size)
         self.d_weights = np.zeros(shape=(self.size, self.prev_layer.size))
         self.weights = rng.normal(0, np.sqrt(2.0 / self.prev_layer.size),
@@ -81,8 +81,8 @@ class InputLayer(_Layer):
     def __init__(self, input_size):
         super().__init__(input_size)
 
-    def prepare_for_training(self, batch_size):
-        super().prepare_for_training(batch_size)
+    def prepare_for_training(self, max_batch_size):
+        super().prepare_for_training(max_batch_size)
         self.o_values = np.zeros(shape=(self.size))
 
     def set_data(self, data):
@@ -91,8 +91,8 @@ class InputLayer(_Layer):
     def link_layer(self, prev_layer, next_layer):
         return super().link_layer(prev_layer, next_layer)
 
-    def evaluate_layer(self):
-        return super().evaluate_layer()
+    def evaluate_layer(self, input_batch_size):
+        return super().evaluate_layer(input_batch_size)
 
     def train_layer(self):
         return super().train_layer()
@@ -107,10 +107,12 @@ class PerceptronLayer(_ComputeLayer):
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
 
-    def evaluate_layer(self):
-        self.prev_layer.evaluate_layer()
-        self.b_values = self.weights @ self.prev_layer._get_output()
-        self.o_values = self.activation_method(self.b_values)
+    def evaluate_layer(self, input_batch_size):
+        self.prev_layer.evaluate_layer(input_batch_size)
+        self.b_values[:input_batch_size,
+                      :] = self.weights @ self.prev_layer._get_output()[:input_batch_size, :]
+        self.o_values[:input_batch_size, :] = self.activation_method(
+            self.b_values[:input_batch_size, :])
 
     def _gradient_loss(self) -> np.ndarray:
         self.errror_signals = (self.next_layer.weights.T @
@@ -135,10 +137,12 @@ class PredictionLayer(_ComputeLayer):
         self.classes = classes
         self.activation_method = get_activation_function("softmax")
 
-    def evaluate_layer(self):
-        self.prev_layer.evaluate_layer()
-        self.b_values = self.weights @ self.prev_layer._get_output()
-        self.o_values = self.activation_method(self.b_values)
+    def evaluate_layer(self, input_batch_size):
+        self.prev_layer.evaluate_layer(input_batch_size)
+        self.b_values[:input_batch_size,
+                      :] = self.weights @ self.prev_layer._get_output()[:input_batch_size, :]
+        self.o_values[:input_batch_size, :] = self.activation_method(
+            self.b_values[:input_batch_size, :])
 
     def _gradient_loss(self, y_correct) -> np.ndarray:
         # loss function: cross entropy with softmax
