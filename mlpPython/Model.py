@@ -41,18 +41,23 @@ class Model:
                                                1] if i < len(self.full_layer_model) - 1 else None
             layer.link_layer(prev_layer, next_layer)
 
-    def train_model(self, X, Y, epochs: int):
+    def train_model(self, X, Y, batch_size, epochs: int):
+        # prepare layers for training
+        for layer in self.full_layer_model:
+            layer.prepare_for_training(batch_size)
+
         rng = np.random.default_rng(seed=1)
         for i in range(epochs):
-            idx = rng.integers(0, len(X))
+            idx = rng.integers(0, len(X), size=batch_size)
             x, y = X[idx], Y[idx]
 
-            self.input_layer.set_data(x)
-            self.output_layer.evaluate_layer()
-            self.output_layer.train_layer(correct_solution_idx=y)
+            self.input_layer.set_data(x, batch_size)
+            self.output_layer.evaluate_layer(batch_size)
+            self.output_layer.train_layer(batch_size, correct_solution_idx=y)
 
+    # temporarily only for single inputs
     def __call__(self, input_data):
-        self.input_layer.set_data(input_data)
-        self.output_layer.evaluate_layer()
+        self.input_layer.set_data(input_data, 1)
+        self.output_layer.evaluate_layer(1)
 
-        return self.output_layer._get_output()
+        return self.output_layer._get_output()[0]

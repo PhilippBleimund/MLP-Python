@@ -31,7 +31,7 @@ def test_core():
     model.add(PerceptronLayer(256, "relu"))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
-    model.train_model(X_train, train_labels, 1000)
+    model.train_model(X_train, train_labels, 32, 100)
 
     print("now testing")
 

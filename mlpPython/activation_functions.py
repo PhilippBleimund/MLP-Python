@@ -39,6 +39,6 @@ def relu_abl(z):
 
 
 def softmax(z):
-    shiftx = z - np.max(z)
+    shiftx = z - np.max(z, axis=1, keepdims=True)
     exps = np.exp(shiftx)
-    return exps / np.sum(exps)
+    return exps / np.sum(exps, axis=1, keepdims=True)
