@@ -83,10 +83,10 @@ class InputLayer(_Layer):
 
     def prepare_for_training(self, max_batch_size):
         super().prepare_for_training(max_batch_size)
-        self.o_values = np.zeros(shape=(self.size))
+        self.o_values = np.zeros(shape=(max_batch_size, self.size))
 
-    def set_data(self, data):
-        self.o_values = data
+    def set_data(self, data, input_batch_size):
+        self.o_values[:input_batch_size] = data
 
     def link_layer(self, prev_layer, next_layer):
         return super().link_layer(prev_layer, next_layer)
