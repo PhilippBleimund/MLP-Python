@@ -41,23 +41,43 @@ class Model:
                                                1] if i < len(self.full_layer_model) - 1 else None
             layer.link_layer(prev_layer, next_layer)
 
-    def train_model(self, X, Y, batch_size, epochs: int):
+    def set_training_settings(self, batch_size):
+        self.max_batch_size = batch_size
+
+    def train_model(self, X, Y, epochs: int):
+        if not self.max_batch_size:
+            raise ValueError("missing trainings settings. Use Model.set_training_settings()")
+
         # prepare layers for training
         for layer in self.full_layer_model:
-            layer.prepare_for_training(batch_size)
+            layer.prepare_for_training(self.max_batch_size)
 
         rng = np.random.default_rng(seed=1)
         for i in range(epochs):
-            idx = rng.integers(0, len(X), size=batch_size)
+            idx = rng.integers(0, len(X), size=self.max_batch_size)
             x, y = X[idx], Y[idx]
 
-            self.input_layer.set_data(x, batch_size)
-            self.output_layer.evaluate_layer(batch_size)
-            self.output_layer.train_layer(batch_size, correct_solution_idx=y)
+            self.input_layer.set_data(x, self.max_batch_size)
+            self.output_layer.evaluate_layer(self.max_batch_size)
+            self.output_layer.train_layer(self.max_batch_size, correct_solution_idx=y)
 
     # temporarily only for single inputs
     def __call__(self, input_data):
-        self.input_layer.set_data(input_data, 1)
-        self.output_layer.evaluate_layer(1)
+        if input_data.ndim == 1:
+            self.input_layer.set_data(input_data, 1)
+            self.output_layer.evaluate_layer(1)
+            return self.output_layer._get_output()[0]
+        else:
+            output = []
+            input_size = len(input_data)
+            processing_start = 0
+            processing_step = min(self.max_batch_size, input_size)
+            while processing_start < input_size:
+                self.input_layer.set_data(
+                    input_data[processing_start:processing_start + processing_step, :], processing_step)
+                self.output_layer.evaluate_layer(processing_step)
+                processing_start += processing_step
+                processing_step = min(self.max_batch_size, input_size - processing_start)
+                output = output + self.output_layer._get_output()
 
-        return self.output_layer._get_output()[0]
+            return output

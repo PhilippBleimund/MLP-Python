@@ -1,6 +1,7 @@
 from mlpPython import Model, InputLayer, PerceptronLayer, PredictionLayer
 
 import numpy as np
+import time
 
 from .load_cifar_10 import load_cifar_10_data
 
@@ -31,14 +32,21 @@ def test_core():
     model.add(PerceptronLayer(256, "relu"))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
-    model.train_model(X_train, train_labels, 32, 100)
+    model.set_training_settings(batch_size=32)
+    model.train_model(X_train, train_labels, 100)
 
     print("now testing")
 
     # check acuracy
+    time1 = time.time()
     num_correct = 0
     for i in range(len(X_test)):
         num_correct += model(X_test[i]) == cifar_classes[test_labels[i]]
     print(f"accuracy: {(num_correct/len(X_test))*100}%")
+    print(f"time: {time.time()-time1}")
+
+    time1 = time.time()
+    model(X_test)
+    print(f"time: {time.time()-time1}")
 
     print(model(X_test[0]))
