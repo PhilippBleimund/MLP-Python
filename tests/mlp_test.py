@@ -27,13 +27,12 @@ def test_core():
 
     model = Model()
     model.add(InputLayer(3072))
-    model.add(PerceptronLayer(256*4, "relu"))
-    model.add(PerceptronLayer(256*2, "relu"))
+    model.add(PerceptronLayer(256, "relu"))
     model.add(PerceptronLayer(256, "relu"))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
     model.set_training_settings(batch_size=32)
-    model.train_model(X_train, train_labels, 100)
+    model.train_model(X_train, train_labels, 15, X_test, test_labels)
 
     print("now testing")
 
