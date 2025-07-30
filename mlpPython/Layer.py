@@ -49,8 +49,9 @@ class _ComputeLayer(_Layer):
         super().prepare_for_training(max_batch_size)
         self.b_values = np.zeros(shape=(max_batch_size, self.size))
         self.o_values = np.zeros(shape=(max_batch_size, self.size))
+        # error signals for batch and weight gradient is mean of batch
         self.error_signals = np.zeros(shape=(max_batch_size, self.size))
-        self.d_weights = np.zeros(shape=(max_batch_size, self.size, self.prev_layer.size))
+        self.d_weights = np.zeros(shape=(self.size, self.prev_layer.size))
         self.weights = rng.normal(0, np.sqrt(2.0 / self.prev_layer.size),
                                   size=(self.size, self.prev_layer.size))
         self.bias = np.zeros(shape=(self.size))
@@ -131,16 +132,17 @@ class PerceptronLayer(_ComputeLayer):
         # outer
         # np.einsum("ai, aj -> aij", self.error_signals[:input_batch_size],
         #          self.prev_layer.o_values[:input_batch_size], out=self.d_weights[:input_batch_size])
-        self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
-                                                        self.prev_layer.o_values[:input_batch_size, None, :])
+        # self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
+        #                                                self.prev_layer.o_values[:input_batch_size, None, :])
+        self.d_weights = np.dot(
+            self.error_signals[:input_batch_size].T, self.prev_layer.o_values[:input_batch_size]) / input_batch_size
 
         return self.d_weights, self.error_signals
 
     def train_layer(self, input_batch_size):
         # get gradient and median along the batches
-        delta_individual, error_individual = self._gradient_loss(input_batch_size)
-        delta_batch = np.sum(delta_individual, axis=0) / input_batch_size
-        delta_batch_bias = np.sum(error_individual, axis=0) / input_batch_size
+        delta_batch, error_individual = self._gradient_loss(input_batch_size)
+        delta_batch_bias = np.mean(error_individual, axis=0)
 
         # apply adam optimizer to the gradient and calculate new weights
         self.adam_time += 1
@@ -176,8 +178,10 @@ class PredictionLayer(_ComputeLayer):
         self.error_signals[:input_batch_size] = np.subtract(
             self.o_values[:input_batch_size], y_correct)
         # outer
-        self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
-                                                        self.prev_layer.o_values[:input_batch_size, None, :])
+        # self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
+        #                                            self.prev_layer.o_values[:input_batch_size, None, :])
+        self.d_weights = np.dot(
+            self.error_signals[:input_batch_size].T, self.prev_layer.o_values[:input_batch_size]) / input_batch_size
 
         return self.d_weights, self.error_signals
 
@@ -195,8 +199,7 @@ class PredictionLayer(_ComputeLayer):
         # print(f"cross entropy: {cross_entropy}")
 
         # get gradient and median along the batches
-        delta_individual, error_individual = self._gradient_loss(input_batch_size, y_correct)
-        delta_batch = np.sum(delta_individual, axis=0) / input_batch_size
+        delta_batch, error_individual = self._gradient_loss(input_batch_size, y_correct)
         delta_batch_bias = np.sum(error_individual, axis=0) / input_batch_size
         # print(
         #    f"gradient weights: {np.linalg.norm(delta_batch)} gradient bias: {np.linalg.norm(delta_batch_bias)}")
