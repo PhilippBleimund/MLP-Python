@@ -58,8 +58,6 @@ class Model:
         for i in range(epochs):
             p = rng.permutation(len(X))
 
-    # temporarily only for single inputs
-    def __call__(self, input_data):
             for i in range(int(len(X)/self.max_batch_size)):
                 print(i)
                 self.input_layer.set_data(
@@ -71,21 +69,33 @@ class Model:
                 # test accuracy on test data
                 pred = self.__call__(X_test, output_as_idx=True)
                 print(f"accuracy: {np.sum(pred == Y_test)/len(Y_test)}")
+
+    def __call__(self, input_data, output_as_idx=None):
         if input_data.ndim == 1:
             self.input_layer.set_data(input_data, 1)
             self.output_layer.evaluate_layer(1)
-            return self.output_layer._get_output()[0]
+            if output_as_idx:
+                return self.output_layer._get_output()[0]
+            else:
+                return self.output_layer.get_prediction()[0]
         else:
             output = []
             input_size = len(input_data)
             processing_start = 0
-            processing_step = min(self.max_batch_size, input_size)
+
             while processing_start < input_size:
-                self.input_layer.set_data(
-                    input_data[processing_start:processing_start + processing_step, :], processing_step)
-                self.output_layer.evaluate_layer(processing_step)
-                processing_start += processing_step
                 processing_step = min(self.max_batch_size, input_size - processing_start)
-                output = output + self.output_layer._get_output()
+                self.input_layer.set_data(
+                    input_data[processing_start:processing_start + processing_step, :],
+                    processing_step
+                )
+                self.output_layer.evaluate_layer(processing_step)
+
+                if output_as_idx:
+                    output += self.output_layer._get_output()[:processing_step]
+                else:
+                    output += self.output_layer.get_prediction()[:processing_step]
+
+                processing_start += processing_step
 
             return output
