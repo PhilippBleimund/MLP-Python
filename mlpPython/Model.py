@@ -44,7 +44,7 @@ class Model:
     def set_training_settings(self, batch_size):
         self.max_batch_size = batch_size
 
-    def train_model(self, X, Y, epochs: int):
+    def train_model(self, X, Y, epochs: int, X_test=None, Y_test=None):
         if not self.max_batch_size:
             raise ValueError("missing trainings settings. Use Model.set_training_settings()")
 
@@ -52,17 +52,25 @@ class Model:
         for layer in self.full_layer_model:
             layer.prepare_for_training(self.max_batch_size)
 
+        X, Y = np.copy(X), np.copy(Y)
+
         rng = np.random.default_rng(seed=1)
         for i in range(epochs):
-            idx = rng.integers(0, len(X), size=self.max_batch_size)
-            x, y = X[idx], Y[idx]
-
-            self.input_layer.set_data(x, self.max_batch_size)
-            self.output_layer.evaluate_layer(self.max_batch_size)
-            self.output_layer.train_layer(self.max_batch_size, correct_solution_idx=y)
+            p = rng.permutation(len(X))
 
     # temporarily only for single inputs
     def __call__(self, input_data):
+            for i in range(int(len(X)/self.max_batch_size)):
+                print(i)
+                self.input_layer.set_data(
+                    X[p[i*self.max_batch_size:(i+1)*self.max_batch_size]], self.max_batch_size)
+                self.output_layer.evaluate_layer(self.max_batch_size)
+                self.output_layer.train_layer(
+                    self.max_batch_size, correct_solution_idx=Y[p[i*self.max_batch_size:(i+1)*self.max_batch_size]])
+            if X_test is not None and Y_test is not None:
+                # test accuracy on test data
+                pred = self.__call__(X_test, output_as_idx=True)
+                print(f"accuracy: {np.sum(pred == Y_test)/len(Y_test)}")
         if input_data.ndim == 1:
             self.input_layer.set_data(input_data, 1)
             self.output_layer.evaluate_layer(1)
