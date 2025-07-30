@@ -70,9 +70,12 @@ class _ComputeLayer(_Layer):
 
     def _adam_optimizer(self, adam_g, adam_mt, adam_vt):
         m_t = self.adam_beta1 * adam_mt + (1-self.adam_beta1) * adam_g
-        v_t = self.adam_beta2 * adam_vt + (1-self.adam_beta2) * np.square(adam_g)
-        m_corrected = m_t / (1 - (self.adam_beta1 ** self.adam_time))
-        v_corrected = v_t / (1 - (self.adam_beta2 ** self.adam_time))
+        np.square(adam_g, out=adam_g)
+        v_t = self.adam_beta2 * adam_vt + (1-self.adam_beta2) * adam_g
+        adam_beta1_power = self.adam_beta1 ** self.adam_time
+        adam_beta2_power = self.adam_beta2 ** self.adam_time
+        m_corrected = m_t / (1 - adam_beta1_power)
+        v_corrected = v_t / (1 - adam_beta2_power)
 
         theta = self.adam_alpha * (m_corrected / (np.sqrt(v_corrected + self.adam_epsilon)))
 
