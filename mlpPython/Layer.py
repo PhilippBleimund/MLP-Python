@@ -126,8 +126,8 @@ class PerceptronLayer(_ComputeLayer):
         #          self.next_layer.weights, out=self.error_signals[:input_batch_size])
         self.error_signals[:input_batch_size] = np.dot(
             self.next_layer.error_signals[:input_batch_size], self.next_layer.weights)
-        np.multiply(self.error_signals[:input_batch_size], self.activation_method_abl(
-            self.b_values[:input_batch_size]), out=self.error_signals[:input_batch_size])
+        self.error_signals[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size], self.activation_method_abl(
+            self.b_values[:input_batch_size]))
 
         # outer
         # np.einsum("ai, aj -> aij", self.error_signals[:input_batch_size],
@@ -151,8 +151,8 @@ class PerceptronLayer(_ComputeLayer):
         self.adam_mt_old_bias, self.adam_vt_old_bias, theta_bias = self._adam_optimizer(
             delta_batch_bias, self.adam_mt_old_bias, self.adam_vt_old_bias)
 
-        self.weights = np.subtract(self.weights, theta)
-        self.bias = np.subtract(self.bias, theta_bias)
+        self.weights -= theta
+        self.bias -= theta_bias
 
         self.prev_layer.train_layer(input_batch_size)
 
