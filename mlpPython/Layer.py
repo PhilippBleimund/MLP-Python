@@ -53,29 +53,29 @@ class _ComputeLayer(_Layer):
         self.d_weights = np.zeros(shape=(max_batch_size, self.size, self.prev_layer.size))
         self.weights = rng.normal(0, np.sqrt(2.0 / self.prev_layer.size),
                                   size=(self.size, self.prev_layer.size))
+        self.bias = np.zeros(shape=(self.size))
 
         self.adam_mt_old = np.zeros(shape=(self.size, self.prev_layer.size))
         self.adam_vt_old = np.zeros(shape=(self.size, self.prev_layer.size))
+        self.adam_mt_old_bias = np.zeros(shape=(self.size))
+        self.adam_vt_old_bias = np.zeros(shape=(self.size))
 
     def link_layer(self, prev_layer, next_layer):
         super().link_layer(prev_layer, next_layer)
 
     @abstractmethod
-    def _gradient_loss(self, *args, **kwargs) -> np.ndarray:
+    def _gradient_loss(self, *args, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         pass
 
-    def _adam_optimizer(self, adam_g):
-        self.adam_time += 1
-        m_t = self.adam_beta1 * self.adam_mt_old + (1-self.adam_beta1) * adam_g
-        v_t = self.adam_beta2 * self.adam_vt_old + (1-self.adam_beta2) * np.square(adam_g)
+    def _adam_optimizer(self, adam_g, adam_mt, adam_vt):
+        m_t = self.adam_beta1 * adam_mt + (1-self.adam_beta1) * adam_g
+        v_t = self.adam_beta2 * adam_vt + (1-self.adam_beta2) * np.square(adam_g)
         m_corrected = m_t / (1 - (self.adam_beta1 ** self.adam_time))
         v_corrected = v_t / (1 - (self.adam_beta2 ** self.adam_time))
 
         theta = self.adam_alpha * (m_corrected / (np.sqrt(v_corrected + self.adam_epsilon)))
-        self.adam_mt_old = m_t
-        self.adam_vt_old = v_t
 
-        return theta
+        return m_t, v_t, theta
 
 
 class InputLayer(_Layer):
@@ -113,13 +113,13 @@ class PerceptronLayer(_ComputeLayer):
         # self.b_values[:input_batch_size,
         #              :] = self.prev_layer._get_output()[:input_batch_size, :] @ self.weights.T
         self.b_values[:input_batch_size, :] = np.dot(
-            self.prev_layer._get_output()[:input_batch_size, :], self.weights.T)
+            self.prev_layer._get_output()[:input_batch_size, :], self.weights.T) + self.bias
         # np.einsum("ij, aj -> ai", self.weights, self.prev_layer._get_output()
         #          [:input_batch_size, :], out=self.b_values[:input_batch_size])
         self.o_values[:input_batch_size, :] = self.activation_method(
             self.b_values[:input_batch_size, :])
 
-    def _gradient_loss(self, input_batch_size) -> np.ndarray:
+    def _gradient_loss(self, input_batch_size) -> tuple[np.ndarray, np.ndarray]:
         # dot product
         # np.einsum("aj, ji -> ai", self.next_layer.error_signals[:input_batch_size],
         #          self.next_layer.weights, out=self.error_signals[:input_batch_size])
@@ -134,16 +134,23 @@ class PerceptronLayer(_ComputeLayer):
         self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
                                                         self.prev_layer.o_values[:input_batch_size, None, :])
 
-        return self.d_weights
+        return self.d_weights, self.error_signals
 
     def train_layer(self, input_batch_size):
         # get gradient and median along the batches
-        delta_individual = self._gradient_loss(input_batch_size)
-        delta_batch = np.sum(delta_individual, axis=0)
-        delta_batch = np.divide(delta_batch, input_batch_size)
+        delta_individual, error_individual = self._gradient_loss(input_batch_size)
+        delta_batch = np.sum(delta_individual, axis=0) / input_batch_size
+        delta_batch_bias = np.sum(error_individual, axis=0) / input_batch_size
 
         # apply adam optimizer to the gradient and calculate new weights
-        self.weights = np.subtract(self.weights, self._adam_optimizer(delta_batch))
+        self.adam_time += 1
+        self.adam_mt_old, self.adam_vt_old, theta = self._adam_optimizer(
+            delta_batch, self.adam_mt_old, self.adam_vt_old)
+        self.adam_mt_old_bias, self.adam_vt_old_bias, theta_bias = self._adam_optimizer(
+            delta_batch_bias, self.adam_mt_old_bias, self.adam_vt_old_bias)
+
+        self.weights = np.subtract(self.weights, theta)
+        self.bias = np.subtract(self.bias, theta_bias)
 
         self.prev_layer.train_layer(input_batch_size)
 
@@ -160,11 +167,11 @@ class PredictionLayer(_ComputeLayer):
     def evaluate_layer(self, input_batch_size):
         self.prev_layer.evaluate_layer(input_batch_size)
         self.b_values[:input_batch_size, :] = np.dot(
-            self.prev_layer._get_output()[:input_batch_size, :], self.weights.T)
+            self.prev_layer._get_output()[:input_batch_size, :], self.weights.T) + self.bias
         self.o_values[:input_batch_size, :] = self.activation_method(
             self.b_values[:input_batch_size, :])
 
-    def _gradient_loss(self, input_batch_size, y_correct) -> np.ndarray:
+    def _gradient_loss(self, input_batch_size, y_correct) -> tuple[np.ndarray, np.ndarray]:
         # loss function: cross entropy with softmax
         self.error_signals[:input_batch_size] = np.subtract(
             self.o_values[:input_batch_size], y_correct)
@@ -172,7 +179,7 @@ class PredictionLayer(_ComputeLayer):
         self.d_weights[:input_batch_size] = np.multiply(self.error_signals[:input_batch_size, :, None],
                                                         self.prev_layer.o_values[:input_batch_size, None, :])
 
-        return self.d_weights
+        return self.d_weights, self.error_signals
 
     def train_layer(self, input_batch_size, correct_solution_idx=None, correct_solution=None):
         if correct_solution is not None:
@@ -184,21 +191,34 @@ class PredictionLayer(_ComputeLayer):
         else:
             raise ValueError("At least one of the two has to be given")
 
-        error = np.sum(0.5 * np.square(y_correct - self.o_values))
-        cross_entropy = -np.sum(y_correct * np.log(np.clip(self.o_values, 1e-12, 1.-1e-12)))
-        print(f"error: {error}")
-        print(f"cross entropy: {cross_entropy}")
+        cross_entropy = -np.sum(y_correct * np.log(self.o_values)) / input_batch_size
+        # print(f"cross entropy: {cross_entropy}")
 
         # get gradient and median along the batches
-        delta_individual = self._gradient_loss(input_batch_size, y_correct)
-        delta_batch = np.sum(delta_individual, axis=0)
-        delta_batch = np.divide(delta_batch, input_batch_size)
+        delta_individual, error_individual = self._gradient_loss(input_batch_size, y_correct)
+        delta_batch = np.sum(delta_individual, axis=0) / input_batch_size
+        delta_batch_bias = np.sum(error_individual, axis=0) / input_batch_size
+        # print(
+        #    f"gradient weights: {np.linalg.norm(delta_batch)} gradient bias: {np.linalg.norm(delta_batch_bias)}")
 
         # apply adam optimizer to the gradient and calculate new weights
-        self.weights = np.subtract(self.weights, self._adam_optimizer(delta_batch))
+        self.adam_time += 1
+        self.adam_mt_old, self.adam_vt_old, theta = self._adam_optimizer(
+            delta_batch, self.adam_mt_old, self.adam_vt_old)
+        self.adam_mt_old_bias, self.adam_vt_old_bias, theta_bias = self._adam_optimizer(
+            delta_batch_bias, self.adam_mt_old_bias, self.adam_vt_old_bias)
+        # print("Step weight norm:", np.linalg.norm(theta))
+        # print("Step bias norm:", np.linalg.norm(theta_bias))
+
+        self.weights = np.subtract(self.weights, theta)
+        self.bias = np.subtract(self.bias, theta_bias)
 
         self.prev_layer.train_layer(input_batch_size)
 
     def _get_output(self):
+        a = np.argmax(self.o_values, axis=1)
+        return [i for i in a]
+
+    def get_prediction(self):
         a = np.argmax(self.o_values, axis=1)
         return [self.classes[i] for i in a]
