@@ -70,6 +70,9 @@ class Model:
                 pred = self.__call__(X_test, output_as_idx=True)
                 print(f"accuracy: {np.sum(pred == Y_test)/len(Y_test)}")
 
+        # from .Layer import lp
+        # lp.print_stats()
+
     def __call__(self, input_data, output_as_idx=None):
         if input_data.ndim == 1:
             self.input_layer.set_data(input_data, 1)

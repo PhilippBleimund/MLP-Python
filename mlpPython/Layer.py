@@ -1,8 +1,12 @@
+import numba as nb
+from .activation_functions import get_activation_function, get_activation_function_abl
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .activation_functions import get_activation_function, get_activation_function_abl
+# from line_profiler import LineProfiler
+# lp = LineProfiler()
+
 
 rng = np.random.default_rng(seed=1)
 
