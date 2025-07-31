@@ -44,3 +44,25 @@ class AdamOptimizer(_Optimizer):
             gradient, self.adam_mt_old, self.adam_vt_old)
 
         return theta
+
+
+class SGDOptimizer(_Optimizer):
+    def __init__(self, shape, learning_rate=0.01, decay=1e-6, momentum=0.9, nesterov=False):
+        self.learning_rate = learning_rate
+        self.decay = decay
+        self.momentum = momentum
+        self.nesterov = nesterov
+        if momentum > 0:
+            self.velocity = np.zeros(shape=shape)
+
+    def create_delta_weights(self, gradient) -> np.ndarray:
+        if self.momentum == 0.0:
+            return - self.learning_rate * gradient
+
+        self.velocity = self.momentum * self.velocity - self.learning_rate * gradient
+
+        # doesnt work but should be mathematiclt correct
+        if self.nesterov == True:
+            return self.momentum * self.velocity - self.learning_rate * gradient
+        else:
+            return self.velocity

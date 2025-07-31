@@ -1,4 +1,4 @@
-import numba as nb
+from .Optimizer import AdamOptimizer, SGDOptimizer
 from .activation_functions import get_activation_function, get_activation_function_abl
 import numpy as np
 from abc import ABC, abstractmethod
@@ -17,7 +17,7 @@ class _Layer(ABC):
         pass
 
     @abstractmethod
-    def prepare_for_training(self, max_batch_size):
+    def prepare_for_training(self, max_batch_size, optimizer):
         self.max_batch_size = max_batch_size
 
     @abstractmethod
@@ -49,8 +49,8 @@ class _ComputeLayer(_Layer):
         self.adam_epsilon = 1e-8
         self.adam_time = 0
 
-    def prepare_for_training(self, max_batch_size):
-        super().prepare_for_training(max_batch_size)
+    def prepare_for_training(self, max_batch_size, optimizer):
+        super().prepare_for_training(max_batch_size, optimizer)
         self.b_values = np.zeros(shape=(max_batch_size, self.size))
         self.o_values = np.zeros(shape=(max_batch_size, self.size))
         # error signals for batch and weight gradient is mean of batch
@@ -60,10 +60,12 @@ class _ComputeLayer(_Layer):
                                   size=(self.size, self.prev_layer.size))
         self.bias = np.zeros(shape=(self.size))
 
-        self.adam_mt_old = np.zeros(shape=(self.size, self.prev_layer.size))
-        self.adam_vt_old = np.zeros(shape=(self.size, self.prev_layer.size))
-        self.adam_mt_old_bias = np.zeros(shape=(self.size))
-        self.adam_vt_old_bias = np.zeros(shape=(self.size))
+        if optimizer == "adam":
+            self.weight_optimizer = AdamOptimizer(shape=(self.size, self.prev_layer.size))
+            self.bias_optimizer = AdamOptimizer(shape=(self.size))
+        elif optimizer == "sgd":
+            self.weight_optimizer = SGDOptimizer(shape=(self.size, self.prev_layer.size))
+            self.bias_optimizer = SGDOptimizer(shape=(self.size))
 
     def link_layer(self, prev_layer, next_layer):
         super().link_layer(prev_layer, next_layer)
@@ -72,26 +74,13 @@ class _ComputeLayer(_Layer):
     def _gradient_loss(self, *args, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         pass
 
-    def _adam_optimizer(self, adam_g, adam_mt, adam_vt):
-        m_t = self.adam_beta1 * adam_mt + (1-self.adam_beta1) * adam_g
-        np.square(adam_g, out=adam_g)
-        v_t = self.adam_beta2 * adam_vt + (1-self.adam_beta2) * adam_g
-        adam_beta1_power = self.adam_beta1 ** self.adam_time
-        adam_beta2_power = self.adam_beta2 ** self.adam_time
-        m_corrected = m_t / (1 - adam_beta1_power)
-        v_corrected = v_t / (1 - adam_beta2_power)
-
-        theta = self.adam_alpha * (m_corrected / (np.sqrt(v_corrected + self.adam_epsilon)))
-
-        return m_t, v_t, theta
-
 
 class InputLayer(_Layer):
     def __init__(self, input_size):
         super().__init__(input_size)
 
-    def prepare_for_training(self, max_batch_size):
-        super().prepare_for_training(max_batch_size)
+    def prepare_for_training(self, max_batch_size, optimizer):
+        super().prepare_for_training(max_batch_size, optimizer)
         self.o_values = np.zeros(shape=(max_batch_size, self.size))
 
     def set_data(self, data, input_batch_size):
@@ -152,14 +141,11 @@ class PerceptronLayer(_ComputeLayer):
         delta_batch_bias = np.mean(error_individual, axis=0)
 
         # apply adam optimizer to the gradient and calculate new weights
-        self.adam_time += 1
-        self.adam_mt_old, self.adam_vt_old, theta = self._adam_optimizer(
-            delta_batch, self.adam_mt_old, self.adam_vt_old)
-        self.adam_mt_old_bias, self.adam_vt_old_bias, theta_bias = self._adam_optimizer(
-            delta_batch_bias, self.adam_mt_old_bias, self.adam_vt_old_bias)
+        theta = self.weight_optimizer.create_delta_weights(delta_batch)
+        theta_bias = self.bias_optimizer.create_delta_weights(delta_batch_bias)
 
-        self.weights -= theta
-        self.bias -= theta_bias
+        self.weights = np.add(self.weights, theta)
+        self.bias = np.add(self.weights, theta_bias)
 
         self.prev_layer.train_layer(input_batch_size)
 
@@ -212,16 +198,13 @@ class PredictionLayer(_ComputeLayer):
         #    f"gradient weights: {np.linalg.norm(delta_batch)} gradient bias: {np.linalg.norm(delta_batch_bias)}")
 
         # apply adam optimizer to the gradient and calculate new weights
-        self.adam_time += 1
-        self.adam_mt_old, self.adam_vt_old, theta = self._adam_optimizer(
-            delta_batch, self.adam_mt_old, self.adam_vt_old)
-        self.adam_mt_old_bias, self.adam_vt_old_bias, theta_bias = self._adam_optimizer(
-            delta_batch_bias, self.adam_mt_old_bias, self.adam_vt_old_bias)
+        theta = self.weight_optimizer.create_delta_weights(delta_batch)
+        theta_bias = self.bias_optimizer.create_delta_weights(delta_batch_bias)
         # print("Step weight norm:", np.linalg.norm(theta))
         # print("Step bias norm:", np.linalg.norm(theta_bias))
 
-        self.weights = np.subtract(self.weights, theta)
-        self.bias = np.subtract(self.bias, theta_bias)
+        self.weights = np.add(self.weights, theta)
+        self.bias = np.add(self.weights, theta_bias)
 
         self.prev_layer.train_layer(input_batch_size)
 

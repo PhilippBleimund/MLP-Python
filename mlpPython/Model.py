@@ -41,8 +41,9 @@ class Model:
                                                1] if i < len(self.full_layer_model) - 1 else None
             layer.link_layer(prev_layer, next_layer)
 
-    def set_training_settings(self, batch_size):
+    def set_training_settings(self, batch_size=32, optimizer="adam"):
         self.max_batch_size = batch_size
+        self.optimizer = optimizer
 
     def train_model(self, X, Y, epochs: int, X_test=None, Y_test=None):
         if not self.max_batch_size:
@@ -50,7 +51,7 @@ class Model:
 
         # prepare layers for training
         for layer in self.full_layer_model:
-            layer.prepare_for_training(self.max_batch_size)
+            layer.prepare_for_training(self.max_batch_size, self.optimizer)
 
         X, Y = np.copy(X), np.copy(Y)
 
