@@ -31,10 +31,11 @@ def test_core():
     model.add(PerceptronLayer(256, "relu"))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
-    model.set_training_settings(batch_size=32)
-    model.train_model(X_train, train_labels, 15, X_test, test_labels)
+    model.set_training_settings(batch_size=32, optimizer="sgd", normalizer="no")
+    model.train_model(X_train, train_labels, 1, X_test, test_labels)
 
     print("now testing")
+    model.lock_model()
 
     # check acuracy
     time1 = time.time()
