@@ -8,8 +8,11 @@ class _Optimizer(ABC):
         pass
 
     @abstractmethod
-    def create_delta_weights(self, *args, **kwargs) -> np.ndarray:
+    def _create_delta_weights(self, *args, **kwargs) -> np.ndarray:
         pass
+
+    def __call__(self, *args, **kwargs) -> np.ndarray:
+        return self._create_delta_weights(*args, **kwargs)
 
 
 class AdamOptimizer(_Optimizer):
@@ -37,7 +40,7 @@ class AdamOptimizer(_Optimizer):
 
         return m_t, v_t, theta
 
-    def create_delta_weights(self, gradient) -> np.ndarray:
+    def _create_delta_weights(self, gradient) -> np.ndarray:
         self.adam_time += 1
 
         self.adam_mt_old, self.adam_vt_old, theta = self._adam_optimizer(
@@ -55,7 +58,7 @@ class SGDOptimizer(_Optimizer):
         if momentum > 0:
             self.velocity = np.zeros(shape=shape)
 
-    def create_delta_weights(self, gradient) -> np.ndarray:
+    def _create_delta_weights(self, gradient) -> np.ndarray:
         if self.momentum == 0.0:
             return - self.learning_rate * gradient
 
