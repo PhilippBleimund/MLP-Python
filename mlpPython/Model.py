@@ -12,6 +12,8 @@ class Model:
 
         self.to_assemble = []
 
+        self.lock = False
+
     def add(self, layerdata: _Layer):
         self.to_assemble.append(layerdata)
 
@@ -41,17 +43,20 @@ class Model:
                                                1] if i < len(self.full_layer_model) - 1 else None
             layer.link_layer(prev_layer, next_layer)
 
-    def set_training_settings(self, batch_size=32, optimizer="adam"):
+    def set_training_settings(self, batch_size=32, optimizer="adam", normalizer="no"):
         self.max_batch_size = batch_size
         self.optimizer = optimizer
+        self.normalizer = normalizer
 
     def train_model(self, X, Y, epochs: int, X_test=None, Y_test=None):
+        if self.lock:
+            raise ValueError("Model is locked. Cant be trained")
         if not self.max_batch_size:
             raise ValueError("missing trainings settings. Use Model.set_training_settings()")
 
         # prepare layers for training
         for layer in self.full_layer_model:
-            layer.prepare_for_training(self.max_batch_size, self.optimizer)
+            layer.prepare_for_training(self.max_batch_size, self.optimizer, self.normalizer)
 
         X, Y = np.copy(X), np.copy(Y)
 
@@ -63,7 +68,7 @@ class Model:
                 print(i)
                 self.input_layer.set_data(
                     X[p[i*self.max_batch_size:(i+1)*self.max_batch_size]], self.max_batch_size)
-                self.output_layer.evaluate_layer(self.max_batch_size)
+                self.output_layer.evaluate_layer(self.max_batch_size, False)
                 self.output_layer.train_layer(
                     self.max_batch_size, correct_solution_idx=Y[p[i*self.max_batch_size:(i+1)*self.max_batch_size]])
             if X_test is not None and Y_test is not None:
@@ -74,10 +79,16 @@ class Model:
         # from .Layer import lp
         # lp.print_stats()
 
+    def lock_model(self):
+        self.lock = True
+
+        for layer in self.full_layer_model:
+            layer.lock_layer()
+
     def __call__(self, input_data, output_as_idx=None):
         if input_data.ndim == 1:
             self.input_layer.set_data(input_data, 1)
-            self.output_layer.evaluate_layer(1)
+            self.output_layer.evaluate_layer(1, inference=self.lock)
             if output_as_idx:
                 return self.output_layer._get_output()[0]
             else:
@@ -93,7 +104,7 @@ class Model:
                     input_data[processing_start:processing_start + processing_step, :],
                     processing_step
                 )
-                self.output_layer.evaluate_layer(processing_step)
+                self.output_layer.evaluate_layer(processing_step, inference=self.lock)
 
                 if output_as_idx:
                     output += self.output_layer._get_output()[:processing_step]
