@@ -1,14 +1,16 @@
-from .Layer import InputLayer, PerceptronLayer, PredictionLayer, _Layer
+from .Layer import ActivationLayer, InputLayer, LinearLayer, NormalizationLayer, PredictionLayer, _Layer
 import numpy as np
+
+from typing import Sequence
 
 
 class Model:
     def __init__(self):
         self.input_layer: InputLayer
-        self.hidden_layer: list[PerceptronLayer]
+        self.hidden_layer: list[_Layer]
         self.output_layer: PredictionLayer
 
-        self.full_layer_model = list[_Layer]
+        self.full_layer_model: Sequence[_Layer]
 
         self.to_assemble = []
 
@@ -25,7 +27,8 @@ class Model:
         self.input_layer = input_layers[0]
 
         # get hidden layers
-        hidden_layers = [layer for layer in self.to_assemble if isinstance(layer, PerceptronLayer)]
+        hidden_layers = [layer for layer in self.to_assemble if isinstance(
+            layer, (LinearLayer, NormalizationLayer, ActivationLayer))]
         self.hidden_layers = hidden_layers
 
         # get output layer
@@ -54,9 +57,8 @@ class Model:
         if not self.max_batch_size:
             raise ValueError("missing trainings settings. Use Model.set_training_settings()")
 
-        # prepare layers for training
         for layer in self.full_layer_model:
-            layer.prepare_for_training(self.max_batch_size, self.optimizer, self.normalizer)
+            layer.prepare_for_training(self.optimizer, self.normalizer)
 
         X, Y = np.copy(X), np.copy(Y)
 
@@ -67,10 +69,10 @@ class Model:
             for i in range(int(len(X)/self.max_batch_size)):
                 print(i)
                 self.input_layer.set_data(
-                    X[p[i*self.max_batch_size:(i+1)*self.max_batch_size]], self.max_batch_size)
-                self.output_layer.evaluate_layer(self.max_batch_size, False)
+                    X[p[i*self.max_batch_size:(i+1)*self.max_batch_size]])
+                self.output_layer.evaluate_layer(False)
                 self.output_layer.train_layer(
-                    self.max_batch_size, correct_solution_idx=Y[p[i*self.max_batch_size:(i+1)*self.max_batch_size]])
+                    correct_solution_idx=Y[p[i*self.max_batch_size:(i+1)*self.max_batch_size]])
             if X_test is not None and Y_test is not None:
                 # test accuracy on test data
                 pred = self.__call__(X_test, output_as_idx=True)
@@ -87,8 +89,8 @@ class Model:
 
     def __call__(self, input_data, output_as_idx=None):
         if input_data.ndim == 1:
-            self.input_layer.set_data(input_data, 1)
-            self.output_layer.evaluate_layer(1, inference=self.lock)
+            self.input_layer.set_data(input_data)
+            self.output_layer.evaluate_layer(inference=self.lock)
             if output_as_idx:
                 return self.output_layer._get_output()[0]
             else:
@@ -101,10 +103,8 @@ class Model:
             while processing_start < input_size:
                 processing_step = min(self.max_batch_size, input_size - processing_start)
                 self.input_layer.set_data(
-                    input_data[processing_start:processing_start + processing_step, :],
-                    processing_step
-                )
-                self.output_layer.evaluate_layer(processing_step, inference=self.lock)
+                    input_data[processing_start:processing_start + processing_step, :])
+                self.output_layer.evaluate_layer(inference=self.lock)
 
                 if output_as_idx:
                     output += self.output_layer._get_output()[:processing_step]

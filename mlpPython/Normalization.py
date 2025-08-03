@@ -21,6 +21,9 @@ class _Normalizer(ABC):
     def prepare_for_inference(self, *args, **kwargs):
         pass
 
+    def __call__(self, *args, **kwargs):
+        return self.normalize(*args, **kwargs)
+
 
 class NoNormalizer(_Normalizer):
     def __init__(self):
