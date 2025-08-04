@@ -1,3 +1,4 @@
+from types import MethodWrapperType
 from .Layer import ActivationLayer, InputLayer, LinearLayer, NormalizationLayer, PredictionLayer, _Layer
 import numpy as np
 
@@ -15,6 +16,7 @@ class Model:
         self.to_assemble = []
 
         self.lock = False
+        self.statistics: dict
 
     def add(self, layerdata: _Layer):
         self.to_assemble.append(layerdata)
@@ -48,6 +50,7 @@ class Model:
 
     def set_training_settings(self, batch_size=32, optimizer="adam", normalizer="no"):
         self.max_batch_size = batch_size
+        self.max_inference_size = batch_size
         self.optimizer = optimizer
         self.normalizer = normalizer
 
@@ -56,6 +59,10 @@ class Model:
             raise ValueError("Model is locked. Cant be trained")
         if not self.max_batch_size:
             raise ValueError("missing trainings settings. Use Model.set_training_settings()")
+
+        metrics = {}
+        metrics["accuracy_test"] = []
+        metrics["accuracy_train"] = []
 
         for layer in self.full_layer_model:
             layer.prepare_for_training(self.optimizer, self.normalizer)
@@ -76,16 +83,15 @@ class Model:
             if X_test is not None and Y_test is not None:
                 # test accuracy on test data
                 pred = self.__call__(X_test, output_as_idx=True)
-                print(f"accuracy: {np.sum(pred == Y_test)/len(Y_test)}")
+                metrics["accuracy_train"].append(np.sum(pred == Y_test)/len(Y_test))
+                pred = self.__call__(X, output_as_idx=True)
+                metrics["accuracy_test"].append(np.sum(pred == Y)/len(Y))
 
-        # from .Layer import lp
-        # lp.print_stats()
+        return metrics
 
-    def lock_model(self):
+    def lock_model(self, max_inference_size):
         self.lock = True
-
-        for layer in self.full_layer_model:
-            layer.lock_layer()
+        self.max_inference_size = max_inference_size
 
     def __call__(self, input_data, output_as_idx=None):
         if input_data.ndim == 1:
@@ -101,7 +107,7 @@ class Model:
             processing_start = 0
 
             while processing_start < input_size:
-                processing_step = min(self.max_batch_size, input_size - processing_start)
+                processing_step = min(self.max_inference_size, input_size - processing_start)
                 self.input_layer.set_data(
                     input_data[processing_start:processing_start + processing_step, :])
                 self.output_layer.evaluate_layer(inference=self.lock)

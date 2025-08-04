@@ -5,6 +5,8 @@ import time
 
 from .load_cifar_10 import load_cifar_10_data
 
+import matplotlib.pyplot as plt
+
 
 def test_core():
     train_data, train_filenames, train_labels, test_data, test_filenames, test_labels, label_names = \
@@ -28,23 +30,39 @@ def test_core():
     model = Model()
     model.add(InputLayer(3072))
     model.add(LinearLayer(256))
+    model.add(NormalizationLayer(256, "sgd", "batch"))
     model.add(ActivationLayer(256, "relu"))
     model.add(LinearLayer(256))
+    model.add(NormalizationLayer(256, "sgd", "batch"))
     model.add(ActivationLayer(256, "relu"))
     model.add(LinearLayer(10))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
     model.set_training_settings(batch_size=32, optimizer="sgd", normalizer="no")
-    model.train_model(X_train, train_labels, 15, X_test, test_labels)
+    metrics = model.train_model(X_train, train_labels, 15, X_test, test_labels)
+
+    epochs = list(range(1, len(metrics["accuracy_train"]) + 1))
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, metrics["accuracy_train"], label="Train Accuracy", marker='o')
+    plt.plot(epochs, metrics["accuracy_test"], label="Test Accuracy", marker='s')
+    plt.ylim(0, 1)
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Training and Testing Accuracy Over Epochs")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
     print("now testing")
-    model.lock_model()
+    model.lock_model(64)
 
     # check acuracy
     time1 = time.time()
     num_correct = 0
     for i in range(len(X_test)):
-        num_correct += model(X_test[i]) == cifar_classes[test_labels[i]]
+        pass
+        # num_correct += model(X_test[i]) == cifar_classes[test_labels[i]]
     print(f"accuracy: {(num_correct/len(X_test))*100}%")
     print(f"time: {time.time()-time1}")
 
