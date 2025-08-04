@@ -127,14 +127,16 @@ class LinearLayer(_Layer):
 
 
 class NormalizationLayer(_Layer):
-    def __init__(self, size):
+    def __init__(self, size, optimizer, normalizer):
         super().__init__(size)
 
-    def prepare_for_training(self, optimizer, normalizer):
         if normalizer == "batch":
-            self.normalizer = BatchNormalizer(shape=self.size)
+            self.normalizer = BatchNormalizer(shape=self.size, optimizer=optimizer)
         else:
             self.normalizer = NoNormalizer()
+
+    def prepare_for_training(self, optimizer, normalizer):
+        return super().prepare_for_training(optimizer, normalizer)
 
     def evaluate_layer(self, inference: bool):
         o_values_prev = self.prev_layer.evaluate_layer(inference)
@@ -142,8 +144,17 @@ class NormalizationLayer(_Layer):
 
         return self.o_values
 
-    def _gradient_loss(self):
-        pass
+    def _gradient_loss(self, prev_output_error):
+        return self.normalizer.gradient(self.prev_layer.o_values, prev_output_error)
+
+    def train_layer(self, propagated_error):
+        # train
+        self.normalizer.train(propagated_error)
+
+        # apply own error
+        propagated_error = self._gradient_loss(propagated_error)
+
+        self.prev_layer.train_layer(propagated_error)
 
 
 class ActivationLayer(_Layer):
