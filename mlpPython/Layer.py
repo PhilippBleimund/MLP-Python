@@ -18,6 +18,9 @@ class _Layer(ABC):
         # for linter. The start and end of an model are None
         self.prev_layer: _Layer
         self.next_layer: _Layer
+        # each layer has atleas these.
+        self.o_values: np.ndarray
+        self.error: np.ndarray
 
     @abstractmethod
     def prepare_for_training(self, optimizer, normalizer):
@@ -42,8 +45,6 @@ class _Layer(ABC):
 class InputLayer(_Layer):
     def __init__(self, input_size):
         super().__init__(input_size)
-
-        self.o_values: np.ndarray
 
     def set_data(self, data):
         if data.ndim == 1:
@@ -74,8 +75,6 @@ class LinearLayer(_Layer):
     def __init__(self, size):
         super().__init__(size)
 
-        self.o_values: np.ndarray
-        self.error: np.ndarray
         self.weights: np.ndarray
         self.bias: np.ndarray
         self.d_weights: np.ndarray
@@ -153,9 +152,6 @@ class ActivationLayer(_Layer):
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
 
-        self.o_values: np.ndarray
-        self.error: np.ndarray
-
     def prepare_for_training(self, optimizer, normalizer):
         return super().prepare_for_training(optimizer, normalizer)
 
@@ -189,9 +185,6 @@ class PredictionLayer(_Layer):
         super().__init__(size)
         self.classes = classes
         self.activation_method = get_activation_function("softmax")
-
-        self.o_values: np.ndarray
-        self.error: np.ndarray
 
     def prepare_for_training(self, optimizer, normalizer):
         return super().prepare_for_training(optimizer, normalizer)
