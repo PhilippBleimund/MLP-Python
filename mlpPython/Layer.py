@@ -187,6 +187,45 @@ class ActivationLayer(_Layer):
         self.prev_layer.train_layer(propagated_error)
 
 
+class DropoutLayer(_Layer):
+    def __init__(self, size, dropout_factor):
+        super().__init__(size)
+        self.dropout_factor = dropout_factor
+        self.rng = np.random.default_rng(seed=1)
+
+        self.mask: np.ndarray
+
+    def prepare_for_training(self, optimizer, normalizer):
+        return super().prepare_for_training(optimizer, normalizer)
+
+    def evaluate_layer(self, inference: bool) -> np.ndarray:
+        o_values_prev = self.prev_layer.evaluate_layer(inference)
+
+        if inference == True:
+            # in inference the whole layer is used
+            self.o_values = self.dropout_factor * o_values_prev
+        else:
+            # in training some of the layer is blocked
+            self.mask = self.rng.choice([0, 1], size=np.shape(o_values_prev), p=[
+                                        1-self.dropout_factor, self.dropout_factor])
+            self.o_values = self.mask * o_values_prev
+
+        return self.o_values
+
+    def _gradient_loss(self, prev_output_error):
+        self.error = self.mask * prev_output_error
+
+        return self.error
+
+    def train_layer(self, propagated_error):
+        # nothing to train
+
+        # apply own error
+        propagated_error = self._gradient_loss(propagated_error)
+
+        self.prev_layer.train_layer(propagated_error)
+
+
 class PredictionLayer(_Layer):
     """
     Expects an Linear Layer with the same size as previous layer.

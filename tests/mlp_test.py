@@ -30,9 +30,11 @@ def test_core():
     model = Model()
     model.add(InputLayer(3072))
     model.add(LinearLayer(256))
+    model.add(DropoutLayer(256, 0.5))
     model.add(NormalizationLayer(256, "sgd", "batch"))
     model.add(ActivationLayer(256, "relu"))
     model.add(LinearLayer(256))
+    model.add(DropoutLayer(256, 0.5))
     model.add(NormalizationLayer(256, "sgd", "batch"))
     model.add(ActivationLayer(256, "relu"))
     model.add(LinearLayer(10))
@@ -61,8 +63,7 @@ def test_core():
     time1 = time.time()
     num_correct = 0
     for i in range(len(X_test)):
-        pass
-        # num_correct += model(X_test[i]) == cifar_classes[test_labels[i]]
+        num_correct += model(X_test[i]) == cifar_classes[test_labels[i]]
     print(f"accuracy: {(num_correct/len(X_test))*100}%")
     print(f"time: {time.time()-time1}")
 
