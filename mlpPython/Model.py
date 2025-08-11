@@ -1,5 +1,6 @@
 from types import MethodWrapperType
 from .Layer import ActivationLayer, InputLayer, LinearLayer, NormalizationLayer, PredictionLayer, _Layer
+from .Convolution import _Conv, FlatteningLayer, ConvolutionLayer, MaxPool
 import numpy as np
 
 from typing import Sequence
@@ -8,17 +9,20 @@ from typing import Sequence
 class Model:
     def __init__(self):
         self.input_layer: InputLayer
-        self.hidden_layer: list[_Layer]
+        self.conv_layers: Sequence[_Conv]
+        self.flattening_layer: FlatteningLayer
+        self.hidden_layer: Sequence[_Layer]
         self.output_layer: PredictionLayer
 
-        self.full_layer_model: Sequence[_Layer]
+        self.full_layer_model: Sequence
 
         self.to_assemble = []
 
         self.lock = False
+        self.cnn = False
         self.statistics: dict
 
-    def add(self, layerdata: _Layer):
+    def add(self, layerdata):
         self.to_assemble.append(layerdata)
 
     def assemble_model(self):
@@ -33,13 +37,31 @@ class Model:
             layer, (LinearLayer, NormalizationLayer, ActivationLayer))]
         self.hidden_layers = hidden_layers
 
+        # get conv layers
+        conv_layers = [layer for layer in self.to_assemble if isinstance(
+            layer, (ConvolutionLayer, MaxPool))]
+        self.conv_layers = conv_layers
+        if len(self.conv_layers) >= 1:
+            self.cnn = True
+
+        # get flattening layer
+        flat_layer = [layer for layer in self.to_assemble if isinstance(
+            layer, (FlatteningLayer))]
+        if len(input_layers) != 1 and self.cnn == True:
+            raise ValueError("There has to be an flattening layer")
+        self.flattening_layer = flat_layer[0]
+
         # get output layer
         output_layers = [layer for layer in self.to_assemble if isinstance(layer, PredictionLayer)]
         if len(output_layers) != 1:
             raise ValueError("There must be exactly one output layer.")
         self.output_layer = output_layers[0]
 
-        self.full_layer_model = [self.input_layer] + self.hidden_layers + [self.output_layer]
+        if self.cnn:
+            self.full_layer_model = [self.input_layer] + self.conv_layers + \
+                [self.flattening_layer] + self.hidden_layers + [self.output_layer]
+        else:
+            self.full_layer_model = [self.input_layer] + self.hidden_layers + [self.output_layer]
 
         # assemble the layers
         for i, layer in enumerate(self.full_layer_model):
@@ -65,7 +87,10 @@ class Model:
         metrics["accuracy_train"] = []
 
         for layer in self.full_layer_model:
-            layer.prepare_for_training(self.optimizer, self.normalizer)
+            if isinstance(layer, _Layer):
+                layer.prepare_for_training(self.optimizer)
+            else:
+                layer.prepare_for_training()
 
         X, Y = np.copy(X), np.copy(Y)
 
@@ -86,6 +111,11 @@ class Model:
                 metrics["accuracy_train"].append(np.sum(pred == Y_test)/len(Y_test))
                 pred = self.__call__(X, output_as_idx=True)
                 metrics["accuracy_test"].append(np.sum(pred == Y)/len(Y))
+
+        from .conv_functions import lp
+        from .Convolution import lp as lp2
+        lp.print_stats()
+        lp2.print_stats()
 
         return metrics
 
