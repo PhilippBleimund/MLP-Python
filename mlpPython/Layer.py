@@ -12,7 +12,7 @@ rng = np.random.default_rng(seed=1)
 
 
 class _Layer(ABC):
-    def __init__(self, size: int):
+    def __init__(self, size):
         self.size = size
 
         # for linter. The start and end of an model are None
@@ -23,7 +23,7 @@ class _Layer(ABC):
         self.error: np.ndarray
 
     @abstractmethod
-    def prepare_for_training(self, optimizer, normalizer):
+    def prepare_for_training(self, optimizer):
         pass
 
     def link_layer(self, prev_layer, next_layer):
@@ -49,11 +49,13 @@ class InputLayer(_Layer):
     def set_data(self, data):
         if data.ndim == 1:
             self.o_values = data[np.newaxis, :]
+        elif data.ndim == 3:
+            self.o_values = data[np.newaxis, :, :, :]
         else:
             self.o_values = data
 
-    def prepare_for_training(self, optimizer, normalizer):
-        return super().prepare_for_training(optimizer, normalizer)
+    def prepare_for_training(self, optimizer):
+        return super().prepare_for_training(optimizer)
 
     def link_layer(self, prev_layer, next_layer):
         return super().link_layer(prev_layer, next_layer)
@@ -63,9 +65,6 @@ class InputLayer(_Layer):
 
     def train_layer(self, *args, **kwargs):
         return super().train_layer(*args, **kwargs)
-
-    def _get_output(self):
-        return self.o_values
 
     def lock_layer(self):
         return super().lock_layer()
@@ -80,7 +79,7 @@ class LinearLayer(_Layer):
         self.d_weights: np.ndarray
         self.d_bias: np.ndarray
 
-    def prepare_for_training(self, optimizer, normalizer):
+    def prepare_for_training(self, optimizer):
         self.weights = rng.normal(0, np.sqrt(2.0 / self.prev_layer.size),
                                   size=(self.size, self.prev_layer.size))
         self.bias = np.zeros(shape=(self.size))
@@ -127,16 +126,16 @@ class LinearLayer(_Layer):
 
 
 class NormalizationLayer(_Layer):
-    def __init__(self, size, optimizer, normalizer):
+    def __init__(self, size, normalizer):
         super().__init__(size)
 
-        if normalizer == "batch":
+        self.normalizer_user = normalizer
+
+    def prepare_for_training(self, optimizer):
+        if self.normalizer_user == "batch":
             self.normalizer = BatchNormalizer(shape=self.size, optimizer=optimizer)
         else:
             self.normalizer = NoNormalizer()
-
-    def prepare_for_training(self, optimizer, normalizer):
-        return super().prepare_for_training(optimizer, normalizer)
 
     def evaluate_layer(self, inference: bool):
         o_values_prev = self.prev_layer.evaluate_layer(inference)
@@ -163,8 +162,8 @@ class ActivationLayer(_Layer):
         self.activation_method = get_activation_function(activation_method)
         self.activation_method_abl = get_activation_function_abl(activation_method)
 
-    def prepare_for_training(self, optimizer, normalizer):
-        return super().prepare_for_training(optimizer, normalizer)
+    def prepare_for_training(self, optimizer):
+        return super().prepare_for_training(optimizer)
 
     def evaluate_layer(self, inference):
         o_values_prev = self.prev_layer.evaluate_layer(inference)
@@ -195,8 +194,8 @@ class DropoutLayer(_Layer):
 
         self.mask: np.ndarray
 
-    def prepare_for_training(self, optimizer, normalizer):
-        return super().prepare_for_training(optimizer, normalizer)
+    def prepare_for_training(self, optimizer):
+        return super().prepare_for_training(optimizer)
 
     def evaluate_layer(self, inference: bool) -> np.ndarray:
         o_values_prev = self.prev_layer.evaluate_layer(inference)
@@ -236,8 +235,8 @@ class PredictionLayer(_Layer):
         self.classes = classes
         self.activation_method = get_activation_function("softmax")
 
-    def prepare_for_training(self, optimizer, normalizer):
-        return super().prepare_for_training(optimizer, normalizer)
+    def prepare_for_training(self, optimizer):
+        return super().prepare_for_training(optimizer)
 
     def evaluate_layer(self, inference: bool):
         o_values_prev = self.prev_layer.evaluate_layer(inference)
