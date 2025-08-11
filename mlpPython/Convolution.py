@@ -69,3 +69,21 @@ class FlatteningLayer(_Conv, _Layer):
         # no own error
         self.prev_conv.train_layer(propagated_error)
 
+
+class ConvolutionLayer(_Conv):
+    def __init__(self, size: tuple) -> None:
+        super().__init__(size)
+        self.kernel: np.ndarray
+
+    def prepare_for_training(self):
+        self.kernel = rng.normal(0, np.sqrt(2 / (self.prev_conv.size[2] * self.size[2] * 6)),
+                                 size=(self.size[2], self.prev_conv.size[2], 3, 3))
+
+    def evaluate_layer(self, inference: bool) -> np.ndarray:
+        prev_conv_tensor = self.prev_conv.evaluate_layer(inference)
+
+        conv_tensor = conv3DmultDim(prev_conv_tensor, self.kernel)
+        return conv_tensor
+
+    def train_layer(self, propagated_error):
+        self.prev_conv.train_layer(propagated_error)
