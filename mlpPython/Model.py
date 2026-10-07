@@ -1,6 +1,6 @@
 from types import MethodWrapperType
 from .Layer import ActivationLayer, InputLayer, LinearLayer, NormalizationLayer, PredictionLayer, _Layer
-from .Convolution import _Conv, FlatteningLayer, ConvolutionLayer, MaxPool
+from .Convolution import _Conv, FlatteningLayer, ConvolutionLayer, Pool
 import numpy as np
 
 from typing import Sequence
@@ -39,7 +39,7 @@ class Model:
 
         # get conv layers
         conv_layers = [layer for layer in self.to_assemble if isinstance(
-            layer, (ConvolutionLayer, MaxPool))]
+            layer, (ConvolutionLayer, Pool))]
         self.conv_layers = conv_layers
         if len(self.conv_layers) >= 1:
             self.cnn = True
@@ -87,10 +87,7 @@ class Model:
         metrics["accuracy_train"] = []
 
         for layer in self.full_layer_model:
-            if isinstance(layer, _Layer):
-                layer.prepare_for_training(self.optimizer)
-            else:
-                layer.prepare_for_training()
+            layer.prepare_for_training(self.optimizer)
 
         X, Y = np.copy(X), np.copy(Y)
 
@@ -112,11 +109,6 @@ class Model:
                 pred = self.__call__(X, output_as_idx=True)
                 metrics["accuracy_test"].append(np.sum(pred == Y)/len(Y))
 
-        from .conv_functions import lp
-        from .Convolution import lp as lp2
-        lp.print_stats()
-        lp2.print_stats()
-
         return metrics
 
     def lock_model(self, max_inference_size):
@@ -124,7 +116,7 @@ class Model:
         self.max_inference_size = max_inference_size
 
     def __call__(self, input_data, output_as_idx=None):
-        if input_data.ndim == 1:
+        if input_data.ndim == 1 or input_data.ndim == 3:
             self.input_layer.set_data(input_data)
             self.output_layer.evaluate_layer(inference=self.lock)
             if output_as_idx:
@@ -139,7 +131,7 @@ class Model:
             while processing_start < input_size:
                 processing_step = min(self.max_inference_size, input_size - processing_start)
                 self.input_layer.set_data(
-                    input_data[processing_start:processing_start + processing_step, :])
+                    input_data[processing_start:processing_start + processing_step])
                 self.output_layer.evaluate_layer(inference=self.lock)
 
                 if output_as_idx:

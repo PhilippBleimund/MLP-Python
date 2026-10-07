@@ -1,7 +1,8 @@
-from os import wait
-from line_profiler import LineProfiler
 from .Layer import _Layer
 from .conv_functions import conv3D, conv3DmultDim
+
+from .Pooling import MaxPool, MeanPool
+from .Optimizer import AdamOptimizer, SGDOptimizer
 
 from abc import ABC, abstractmethod
 
@@ -9,8 +10,6 @@ import numpy as np
 import math
 
 rng = np.random.default_rng(seed=1)
-
-lp = LineProfiler()
 
 
 class _Conv(ABC):
@@ -67,7 +66,10 @@ class FlatteningLayer(_Conv, _Layer):
     def train_layer(self, propagated_error):
         # nothing to train
         # no own error
-        self.prev_conv.train_layer(propagated_error)
+        # unflatten error for cnn
+        self.error = np.reshape(propagated_error, (len(propagated_error),) + self.prev_conv.size)
+
+        self.prev_conv.train_layer(self.error)
 
 
 class ConvolutionLayer(_Conv):
@@ -75,9 +77,14 @@ class ConvolutionLayer(_Conv):
         super().__init__(size)
         self.kernel: np.ndarray
 
-    def prepare_for_training(self):
+    def prepare_for_training(self, optimizer):
         self.kernel = rng.normal(0, np.sqrt(2 / (self.prev_conv.size[2] * self.size[2] * 6)),
                                  size=(self.size[2], self.prev_conv.size[2], 3, 3))
+
+        if optimizer == "adam":
+            self.optimizer = AdamOptimizer(shape=(self.size + self.prev_conv.size))
+        elif optimizer == "sgd":
+            self.optimizer = SGDOptimizer(shape=(self.size + self.prev_conv.size))
 
     def evaluate_layer(self, inference: bool) -> np.ndarray:
         prev_conv_tensor = self.prev_conv.evaluate_layer(inference)
@@ -85,62 +92,57 @@ class ConvolutionLayer(_Conv):
         conv_tensor = conv3DmultDim(prev_conv_tensor, self.kernel)
         return conv_tensor
 
+    def _gradient_loss(self, prev_error_signal):
+        # flip kernel around both axis
+        flipped_kernel = np.flip(self.kernel, axis=(2, 3))
+        # swap in/out channels
+        flipped_kernel = np.transpose(flipped_kernel, (1, 0, 2, 3))
+
+        self.error = conv3DmultDim(prev_error_signal, flipped_kernel)
+        return self.error
+
     def train_layer(self, propagated_error):
-        self.prev_conv.train_layer(propagated_error)
+        # apply own error to signal
+        next_propagated_error = self._gradient_loss(propagated_error)
+
+        delta_kernel = self.optimizer(next_propagated_error)
+
+        self.kernel = np.add(self.kernel, delta_kernel)
+
+        self.prev_conv.train_layer(next_propagated_error)
 
 
-class MaxPool(_Conv):
-    def __init__(self, stride: tuple, size: tuple = ()) -> None:
+class Pool(_Conv):
+    def __init__(self, stride: tuple = (3, 3), size: tuple = (), method="max") -> None:
         super().__init__(size)
         self.stride = stride
+        self.method = method
 
-    def prepare_for_training(self):
-        self.size = (self.prev_conv.size[0] / self.stride[0],
-                     self.prev_conv.size[1] / self.stride[1], self.prev_conv.size[2])
+    def prepare_for_training(self, optimizer):
+        self.size = (int(self.prev_conv.size[0] / self.stride[0]),
+                     int(self.prev_conv.size[1] / self.stride[1]), self.prev_conv.size[2])
 
-    # from https://stackoverflow.com/questions/42463172/how-to-perform-max-mean-pooling-on-a-2d-array-using-numpy from Jason
-    def _pooling(self, mat, ksize, method='max', pad=False):
-        '''Non-overlapping pooling on 2D or 3D data.
-
-        <mat>: ndarray, input array to pool.
-        <ksize>: tuple of 2, kernel size in (ky, kx).
-        <method>: str, 'max for max-pooling, 
-                       'mean' for mean-pooling.
-        <pad>: bool, pad <mat> or not. If no pad, output has size
-               n//f, n being <mat> size, f being kernel size.
-               if pad, output has size ceil(n/f).
-
-        Return <result>: pooled matrix.
-        '''
-
-        m, n = mat.shape[:2]
-        ky, kx = ksize
-
-        def _ceil(x, y): return int(np.ceil(x/float(y)))
-
-        if pad:
-            ny = _ceil(m, ky)
-            nx = _ceil(n, kx)
-            size = (ny*ky, nx*kx)+mat.shape[2:]
-            mat_pad = np.full(size, np.nan)
-            mat_pad[:m, :n, ...] = mat
-        else:
-            ny = m//ky
-            nx = n//kx
-            mat_pad = mat[:ny*ky, :nx*kx, ...]
-
-        new_shape = (ny, ky, nx, kx)+mat.shape[2:]
-
-        if method == 'max':
-            result = np.nanmax(mat_pad.reshape(new_shape), axis=(1, 3))
-        else:
-            result = np.nanmean(mat_pad.reshape(new_shape), axis=(1, 3))
-
-        return result
+        if self.method == "max":
+            self.pooler = MaxPool(self.prev_conv.size, self.stride)
+        elif self.method == "mean":
+            self.pooler = MeanPool(self.prev_conv.size, self.stride)
 
     def evaluate_layer(self, inference: bool) -> np.ndarray:
         prev_conv_tensor = self.prev_conv.evaluate_layer(inference)
 
-        self.o_values = self._pooling(prev_conv_tensor, self.stride)
+        self.o_values = self.pooler(prev_conv_tensor, inference)
 
         return self.o_values
+
+    def _gradient_loss(self, prev_error_signal):
+        self.error = self.pooler.gradient(prev_error_signal)
+
+        return self.error
+
+    def train_layer(self, propagated_error):
+        # nothing to train
+
+        # apply own error
+        propagated_error = self._gradient_loss(propagated_error)
+
+        self.prev_conv.train_layer(propagated_error)

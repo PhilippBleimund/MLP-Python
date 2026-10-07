@@ -17,31 +17,37 @@ def test_core():
 
     # Transform images from (32,32,3) to 3072-dimensional vectors (32*32*3)
 
-    X_train = np.reshape(train_data, (50000, 3072))
-    X_test = np.reshape(test_data, (10000, 3072))
-    X_train = X_train.astype('float32')
-    X_test = X_test.astype('float32')
+    X_train_flat = np.reshape(train_data, (50000, 3072))
+    X_test_flat = np.reshape(test_data, (10000, 3072))
+    X_train_flat = X_train_flat.astype('float32')
+    X_test_flat = X_test_flat.astype('float32')
 
     # Normalization of pixel values (to [0-1] range)
 
-    X_train /= 255
-    X_test /= 255
+    X_train_flat /= 255
+    X_train = train_data / 255
+    X_test_flat /= 255
+    X_test = test_data / 255
 
     model = Model()
-    model.add(InputLayer(3072))
+    model.add(InputLayer((32, 32, 3)))
+    model.add(ConvolutionLayer((32, 32, 8)))
+    model.add(Pool((8, 8)))
+    model.add(FlatteningLayer())
+    model.add(LinearLayer(4 * 4 * 8))
+    model.add(DropoutLayer(4 * 4 * 8, 0.5))
+    model.add(NormalizationLayer(4 * 4 * 8, "batch"))
+    model.add(ActivationLayer(4 * 4 * 8, "relu"))
     model.add(LinearLayer(256))
     model.add(DropoutLayer(256, 0.5))
-    model.add(NormalizationLayer(256, "sgd", "batch"))
-    model.add(ActivationLayer(256, "relu"))
-    model.add(LinearLayer(256))
-    model.add(DropoutLayer(256, 0.5))
-    model.add(NormalizationLayer(256, "sgd", "batch"))
+    model.add(NormalizationLayer(256, "batch"))
     model.add(ActivationLayer(256, "relu"))
     model.add(LinearLayer(10))
     model.add(PredictionLayer(10, cifar_classes))
     model.assemble_model()
-    model.set_training_settings(batch_size=32, optimizer="sgd", normalizer="no")
-    metrics = model.train_model(X_train, train_labels, 15, X_test, test_labels)
+    model.set_training_settings(batch_size=10, optimizer="sgd")
+    metrics = model.train_model(X_train[:100], train_labels[:100],
+                                2, X_test[:100], test_labels[:100])
 
     epochs = list(range(1, len(metrics["accuracy_train"]) + 1))
 

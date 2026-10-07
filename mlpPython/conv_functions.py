@@ -5,9 +5,6 @@ Special thanks to Guangzhi for providing these implementations
 
 import numpy as np
 
-from line_profiler import LineProfiler
-lp = LineProfiler()
-
 
 def padArray(var, pad1, pad2=None) -> np.ndarray:
     '''Pad array with 0s
@@ -50,7 +47,6 @@ def pickStrided(var, stride) -> np.ndarray:
     return result
 
 
-@lp
 def conv3D(var, kernel, stride=1, pad=0) -> np.ndarray:
     '''3D convolution by sub-matrix summing.
 
@@ -87,7 +83,6 @@ def conv3D(var, kernel, stride=1, pad=0) -> np.ndarray:
     return np.asarray(result)
 
 
-@lp
 def conv3DmultDim(var, kernel) -> np.ndarray:
     """wrapper around conv3D to allow the user to plug in higher dimensional arrays"""
 
@@ -97,9 +92,9 @@ def conv3DmultDim(var, kernel) -> np.ndarray:
     result = np.zeros(shape=(vs[0], vs[1], vs[2], ks[0]))
 
     # the first dimension is the batch index
-    # for i in range(vs[0]):
-    #    # the second dimension that is looped is the output dimension
-    #    for j in range(ks[0]):
-    #        result[i, :, :, j] = conv3D(var[i, :, :, :], kernel[j, :, :, :], pad=1)
+    for i in range(vs[0]):
+        # the second dimension that is looped is the output dimension
+        for j in range(ks[0]):
+            result[i, :, :, j] = conv3D(var[i, :, :, :], kernel[j, :, :, :], pad=1)
 
     return result
